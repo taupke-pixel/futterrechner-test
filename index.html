@@ -1,1 +1,2110 @@
-sdf
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Futterrechner</title>
+
+<!-- 🔥 HIER die Scripts -->
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+
+<style>
+body{font-family:Arial;margin:0;background:#eef1f4}
+header{background:#2f3b45;color:#fff;padding:14px;text-align:center;font-size:22px}
+.tabs{display:flex}
+.tab{flex:1;padding:14px;text-align:center;background:#d5dbe0;cursor:pointer;font-size:18px}
+.tab.active{background:#2f3b45;color:#fff}
+.panel{padding:14px}
+.hidden{display:none}
+.category{border-radius:14px;margin-bottom:18px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.cat-header{padding:16px;color:#fff;font-weight:bold;cursor:pointer;display:flex;justify-content:space-between;font-size:20px}
+.cat-body{background:#fff;padding:14px}
+.category.collapsed .cat-body{display:none}
+.cat-kuehe{background:#2f80ed}
+.cat-restbullen{background:#16a085}
+.cat-bullen{background:#27ae60}
+.cat-trocken{background:#f2a900}
+.cat-kaelber{background:#9b59b6}
+.cat-faersen{background:#6c8ebf;}
+table{width:100%;border-collapse:collapse;font-size:18px}
+th,td{border-bottom:1px solid #ddd;padding:10px;text-align:right}
+th:first-child,td:first-child{text-align:left;font-weight:bold}
+.sort-btn{border:none;background:#e0e0e0;padding:6px;cursor:pointer;border-radius:6px}
+.sort-active{background:#2f80ed;color:#fff}
+.sort-row{display:grid;grid-template-columns:50px 1fr;gap:10px;margin-bottom:8px}
+.sort-arrows{display:flex;flex-direction:column;gap:6px}
+.total{background:#2f3b45;color:#fff;padding:14px;border-radius:10px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:20px;font-weight:bold}
+.kilo-btn{padding:8px 14px;border-radius:8px;border:none;background:#ccc;font-size:16px;cursor:pointer}
+.kilo-btn.active{background:#2f80ed;color:#fff}
+.inline-total-input{width:140px;font-size:18px}
+.agf{color:#b30000;font-weight:bold}
+.mlf{color:#003399;font-weight:bold}
+.plus{color:#008000;font-weight:bold}
+.minus{color:#c40000;font-weight:bold}
+.calc-box{max-width:380px;margin:auto;background:#fff;padding:14px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.calc-display{background:#eef1f4;padding:14px;font-size:26px;text-align:right;border-radius:8px;margin-bottom:12px}
+.calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.calc-btn{padding:18px;font-size:20px;border:none;border-radius:10px;background:#d5dbe0}
+.calc-btn.op{background:#2f80ed;color:#fff}
+.calc-btn.eq{background:#27ae60;color:#fff}
+.calc-btn.clear{background:#b30000;color:#fff}
+.calc-history{margin-top:14px;font-size:16px;background:#f5f7fa;padding:10px;border-radius:8px;max-height:180px;overflow:auto}
+.editable{
+  cursor:text;
+  border-bottom:1px dashed #000;
+  display:block;
+  align-items:center;
+  gap:4px;
+  margin-top:10px;
+}
+.editable span.stift{font-size:16px;color:#333}
+.save-btn{
+padding:8px 14px;
+border-radius:8px;
+border:none;
+background:#27ae60;
+color:#fff;
+font-size:16px;
+cursor:pointer;
+margin-left:8px;
+}
+
+.save-btn.saved{
+background:#888;
+}
+
+.warning-banner{
+background:#c40000;
+color:#fff;
+padding:14px;
+border-radius:10px;
+margin-bottom:14px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+font-size:18px;
+font-weight:bold;
+}
+
+.warning-banner button{
+background:#fff;
+border:none;
+border-radius:8px;
+padding:8px 12px;
+cursor:pointer;
+}
+
+.history-box{
+background:#fff;
+padding:14px;
+border-radius:12px;
+margin-bottom:14px;
+box-shadow:0 2px 8px rgba(0,0,0,.12);
+}
+
+.history-header{
+font-size:20px;
+font-weight:bold;
+margin-bottom:10px;
+cursor:pointer;
+}
+
+.history-item{
+padding:10px;
+border-bottom:1px solid #ddd;
+}
+
+.lager-card{
+background:#fff;
+padding:14px;
+border-radius:12px;
+margin-bottom:14px;
+box-shadow:0 2px 8px rgba(0,0,0,.12);
+}
+
+.warn-green{
+color:#008000;
+font-weight:bold;
+}
+
+.warn-orange{
+color:#f39c12;
+font-weight:bold;
+}
+
+.warn-red{
+color:#c40000;
+font-weight:bold;
+}
+
+.delivery-form input,
+.delivery-form select{
+width:100%;
+margin-bottom:10px;
+padding:10px;
+font-size:16px;
+}
+.tab-red{
+  background:#d62828 !important;
+  color:white !important;
+}
+
+.tab-orange{
+  background:#f59e0b !important;
+  color:white !important;
+}
+</style></head>
+<body><header>🐄 Futterrechner — Stall Ultra</header><div class="tabs">
+  <div class="tab active" onclick="showTab('calc')">Rechner</div>
+  <div class="tab" onclick="showTab('settings')">Einstellungen</div>
+  <div class="tab" onclick="showTab('calc2')">Taschenrechner</div>
+<div class="tab"
+id="history-tab"
+onclick="showTab('history')">
+
+History
+
+</div>
+</div><div id="calc" class="panel"></div>
+<div id="settings" class="panel hidden"></div>
+<div id="calc2" class="panel hidden"></div>
+  <div id="history" class="panel hidden"></div>
+
+<script>
+
+// 🔐 Zugriffssystem
+
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDxBvoJZLchUbMnMH3E-ZJYHBhbq4JX6r0",
+  authDomain: "futterrechner.firebaseapp.com",
+  projectId: "futterrechner",
+  storageBucket: "futterrechner.firebasestorage.app",
+  messagingSenderId: "858916796951",
+  appId: "1:858916796951:web:dd614896bee4cbba6c7a52",
+  measurementId: "G-X3YZD3B9L7"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const urlParams = new URLSearchParams(window.location.search);
+const approveID = urlParams.get("approve");
+const denyID = urlParams.get("deny");
+
+async function handleApproval(){
+  if(approveID){
+    await db.collection("anfragen").doc(approveID).update({
+      status: "erlaubt"
+    });
+
+    // Zugriff speichern
+    const req = await db.collection("anfragen").doc(approveID).get();
+    const deviceID = req.data().deviceID;
+
+    await db.collection("zugriffe").doc(deviceID).set({
+      status: "erlaubt"
+    });
+
+    alert("Zugriff erlaubt!");
+  }
+
+  if(denyID){
+    await db.collection("anfragen").doc(denyID).update({
+      status: "abgelehnt"
+    });
+
+    alert("Zugriff abgelehnt!");
+  }
+}
+emailjs.init("d0IUYI7pT5TJM46BC");
+
+// Geräte-ID
+const deviceID = localStorage.getItem("deviceID") || Math.random().toString(36).substr(2, 9);
+localStorage.setItem("deviceID", deviceID);
+
+  
+// 👇 DEIN ORIGINAL CODE
+function num(v){ return isNaN(parseFloat(v)) ? 0 : parseFloat(v); }
+function fmt(sec){ sec=Math.round(sec); return Math.floor(sec/60)+" min "+(sec%60)+" s"; }
+
+  function getToday(){
+
+  let d = new Date();
+
+  let tag = String(d.getDate()).padStart(2,"0");
+  let monat = String(d.getMonth()+1).padStart(2,"0");
+  let jahr = d.getFullYear();
+
+  return `${tag}.${monat}.${jahr}`;
+}
+
+function formatDateInput(v){
+
+  if(!v) return getToday();
+
+  let d = new Date(v);
+
+  let tag = String(d.getDate()).padStart(2,"0");
+  let monat = String(d.getMonth()+1).padStart(2,"0");
+  let jahr = d.getFullYear();
+
+  return `${tag}.${monat}.${jahr}`;
+}
+
+/* === DEFAULTS === */
+const defaultGlobal={
+  agfName:"AGF",mlfName:"MLF",
+    bundesland:"Niedersachsen",
+  agfKg:0.5,mlfKg:0.5,
+  kueheName:"Kühe",
+  faersenName:"Färsen",
+  bullenName:"Bullen",
+  restbullenName:"Restmischung Bullen",   
+  trockenName:"Trockensteher",
+  kaelberName:"Kälber"
+};
+
+function defItems(){
+  let a=[];
+  for(let i=1;i<=8;i++)a.push({name:"Futter "+i,kg:0});
+  a.push({type:"agf",kg:0});
+  a.push({type:"mlf",kg:0});
+  return a;
+}
+
+/* === SAFE LOAD === */
+let globalCfg = {
+  ...defaultGlobal,
+  ...JSON.parse(localStorage.getItem("gCfg") || "{}")
+};
+
+let saved=JSON.parse(localStorage.getItem("futter")||"{}");
+function buildCat(def){ return {anz:def,items:defItems(),collapsed:false}; }
+
+let data={
+  kuehe: saved.kuehe||buildCat(100),
+
+  faersen: saved.faersen||buildCat(30),
+
+  restbullen:{rest:0,ziel:0,anz:0,collapsed:false},
+
+  bullen: saved.bullen||buildCat(10),
+  trocken: saved.trocken||buildCat(5),
+  kaelber: saved.kaelber||buildCat(20)
+};
+  
+let sortMode=false;
+let kiloMode={};
+
+  let historyData =
+JSON.parse(localStorage.getItem("history") || "[]");
+
+let lagerData =
+JSON.parse(localStorage.getItem("lager") || JSON.stringify({
+
+  agf:{
+    bestand:0,
+    orange:5,
+    rot:2,
+    lieferzeit:2
+  },
+
+  mlf:{
+    bestand:0,
+    orange:5,
+    rot:2,
+    lieferzeit:2
+  }
+
+}));
+
+let lieferungen =
+JSON.parse(localStorage.getItem("lieferungen") || "[]");
+
+let hiddenWarnings =
+JSON.parse(localStorage.getItem("hiddenWarnings") || "{}");
+
+let historyCollapsed = {
+
+  tageslog:false,
+  lager:false,
+  lieferungen:false,
+  verlauf:false
+
+};
+
+function save(){localStorage.setItem("futter",JSON.stringify(data))}
+function saveGlobal(){localStorage.setItem("gCfg",JSON.stringify(globalCfg))}
+
+  function saveHistoryStorage(){
+  localStorage.setItem(
+    "history",
+    JSON.stringify(historyData)
+  );
+}
+
+function saveLagerStorage(){
+  localStorage.setItem(
+    "lager",
+    JSON.stringify(lagerData)
+  );
+}
+
+function saveLieferungen(){
+  localStorage.setItem(
+    "lieferungen",
+    JSON.stringify(lieferungen)
+  );
+}
+
+function saveHiddenWarnings(){
+  localStorage.setItem(
+    "hiddenWarnings",
+    JSON.stringify(hiddenWarnings)
+  );
+}
+function alreadySavedToday(cat){
+
+  let heute = getToday();
+
+  return historyData.some(e=>
+
+    e.datum===heute &&
+    e.kategorie===cat
+
+  );
+}
+  
+/* === TABS === */
+function showTab(t){
+  ["calc","settings","calc2","history"].forEach(id=>{
+    document.getElementById(id).classList.toggle("hidden",id!==t);
+  });
+  document.querySelectorAll(".tab").forEach(e=>e.classList.remove("active"));
+  document.querySelector(`.tab[onclick*='${t}']`).classList.add("active");
+}
+
+/* === SORT === */
+function toggleSort(){ sortMode=!sortMode; buildSettings(); }
+function moveItem(cat,i,dir){
+  let a=data[cat].items;
+  let n=i+dir;
+  if(n<0||n>=a.length)return;
+  [a[i],a[n]]=[a[n],a[i]];
+  save();buildSettings();buildCalc();
+}
+
+/* === KILO === */
+function toggleKilo(cat){ kiloMode[cat]=!kiloMode[cat]; buildCalc(); }
+
+/* === TOTAL EDIT === */
+function enableTotalEdit(cat){
+  if(!kiloMode[cat])return;
+  let s=document.getElementById("total-"+cat);
+  if(s.querySelector("input"))return;
+  let v=parseFloat(s.dataset.val)||0;
+  s.innerHTML=`<input class="inline-total-input" id="edit-${cat}" type="number" value="${v}" step="0.1"> kg`;
+  let input=document.getElementById("edit-"+cat);
+  input.focus();
+  input.onblur=()=>applyTotalKg(cat,num(input.value));
+  input.onkeydown=e=>{ if(e.key==="Enter") input.blur(); };
+}
+
+function applyTotalKg(cat,kg){
+  let sum=0;
+  data[cat].items.forEach(i=>sum+=i.kg);
+  if(sum<=0)return;
+  data[cat].anz=Math.round(kg/sum);
+  save();buildCalc();
+}
+function saveHistory(cat){
+
+  if(alreadySavedToday(cat)){
+    alert("Heute bereits gespeichert");
+    return;
+  }
+
+  let heute = getToday();
+
+  let eintrag = {
+
+    id: Date.now()+Math.random().toString(36).substr(2,5),
+
+    datum: heute,
+
+    kategorie: cat,
+
+    tiere: data[cat].anz,
+
+    gesamt:0,
+
+    agf:0,
+
+    mlf:0,
+
+    futter:[]
+  };
+
+  data[cat].items.forEach(it=>{
+
+    if(it.kg<=0) return;
+
+    let ges = it.kg * data[cat].anz;
+
+    let name =
+
+      it.type==="agf" ? globalCfg.agfName :
+
+      it.type==="mlf" ? globalCfg.mlfName :
+
+      it.name;
+
+    eintrag.futter.push({
+
+      name:name,
+      kg:ges
+
+    });
+
+    eintrag.gesamt += ges;
+
+    if(it.type==="agf"){
+
+      eintrag.agf += ges;
+
+      lagerData.agf.bestand -= ges;
+    }
+
+    if(it.type==="mlf"){
+
+      eintrag.mlf += ges;
+
+      lagerData.mlf.bestand -= ges;
+    }
+
+  });
+
+  historyData.unshift(eintrag);
+
+  saveHistoryStorage();
+
+  saveLagerStorage();
+
+  buildCalc();
+
+  buildHistory();
+
+  alert("Gespeichert");
+}
+  function calcAverage(produkt){
+
+  let total = 0;
+
+  let tage = 0;
+
+  historyData.forEach(h=>{
+
+    if(produkt==="agf" && h.agf>0){
+
+      total += h.agf;
+
+      tage++;
+    }
+
+    if(produkt==="mlf" && h.mlf>0){
+
+      total += h.mlf;
+
+      tage++;
+    }
+
+  });
+
+  if(tage<=0) return 0;
+
+  return total / tage;
+}
+
+function calcResttage(produkt){
+
+  let avg = calcAverage(produkt);
+
+  if(avg<=0) return 999;
+
+  let tage =
+  lagerData[produkt].bestand / avg;
+
+  if(tage < 0)
+    return 0;
+
+  return tage;
+}
+
+function getEasterSunday(year){
+
+  let f = Math.floor,
+  G = year % 19,
+  C = f(year / 100),
+  H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30,
+  I = H - f(H / 28) * (1 - f(29 / (H + 1)) * f((21 - G) / 11)),
+  J = (year + f(year / 4) + I + 2 - C + f(C / 4)) % 7,
+  L = I - J,
+  month = 3 + f((L + 40) / 44),
+  day = L + 28 - 31 * f(month / 4);
+
+  return new Date(year, month - 1, day);
+}
+
+function formatHolidayDate(date){
+
+  let tag =
+  String(date.getDate()).padStart(2,"0");
+
+  let monat =
+  String(date.getMonth()+1).padStart(2,"0");
+
+  return `${tag}.${monat}`;
+}
+
+function getFeiertage(year,bundesland){
+
+  let easter =
+  getEasterSunday(year);
+
+  let feiertage = [
+
+    "01.01",
+    "01.05",
+    "03.10",
+    "25.12",
+    "26.12"
+
+  ];
+
+  function addDays(base,days){
+
+    let d = new Date(base);
+
+    d.setDate(d.getDate()+days);
+
+    return formatHolidayDate(d);
+  }
+
+  feiertage.push(addDays(easter,-2)); // Karfreitag
+  feiertage.push(addDays(easter,1));  // Ostermontag
+  feiertage.push(addDays(easter,39)); // Himmelfahrt
+  feiertage.push(addDays(easter,50)); // Pfingstmontag
+
+  if([
+    "Bayern",
+    "Baden-Württemberg",
+    "Hessen",
+    "Nordrhein-Westfalen",
+    "Rheinland-Pfalz",
+    "Saarland"
+  ].includes(bundesland)){
+
+    feiertage.push(addDays(easter,60)); // Fronleichnam
+  }
+
+  return feiertage;
+}
+
+function isFeiertag(date){
+
+  let jahr =
+  date.getFullYear();
+
+  let heute =
+  formatHolidayDate(date);
+
+  let feiertage =
+  getFeiertage(
+    jahr,
+    globalCfg.bundesland
+  );
+
+  return feiertage.includes(heute);
+}
+
+function isWochenende(date){
+  
+
+  let tag = date.getDay();
+
+  return tag===0 || tag===6;
+}
+  function isArbeitstag(date){
+
+  if(isWochenende(date))
+    return false;
+
+  if(isFeiertag(date))
+    return false;
+
+  return true;
+}
+
+function addArbeitstage(starttage,arbeitstage){
+
+  
+  let d = new Date(starttage);
+
+  let count = 0;
+
+  while(count < arbeitstage){
+
+    d.setDate(d.getDate()+1);
+
+    if(isArbeitstag(d)){
+      count++;
+    }
+  }
+
+  return d;
+}
+
+  function getLeerDatum(produkt){
+  let avg =
+  calcAverage(produkt);
+
+  if(avg<=0)
+    return null;
+
+  let tage =
+  calcResttage(produkt);
+
+  let d =
+  new Date();
+
+  d.setDate(
+    d.getDate() +
+    Math.floor(tage)
+  );
+
+  return d;
+}
+
+  function getBestellDatum(produkt){
+
+  let leer =
+  getLeerDatum(produkt);
+
+  if(!leer)
+    return null;
+
+  let lieferzeit =
+  lagerData[produkt].lieferzeit || 0;
+
+  let d =
+  new Date(leer);
+
+  let count = 0;
+
+  while(count < lieferzeit){
+
+    d.setDate(d.getDate()-1);
+
+    if(isArbeitstag(d)){
+      count++;
+    }
+  }
+
+  return d;
+}
+
+  function formatDatum(date){
+
+  if(!date)
+    return "-";
+
+  return date.toLocaleDateString(
+    "de-DE",
+    {
+      weekday:"long",
+      day:"2-digit",
+      month:"2-digit",
+      year:"numeric"
+    }
+  );
+}
+
+  function getWarnClass(produkt){
+
+  let tage =
+  calcResttage(produkt);
+
+  let bestell =
+  getBestellDatum(produkt);
+
+  let heute =
+  new Date();
+
+  heute.setHours(0,0,0,0);
+
+  if(bestell){
+
+    let b =
+    new Date(bestell);
+
+    b.setHours(0,0,0,0);
+
+    let diff =
+    Math.ceil(
+      (b - heute)
+      / (1000*60*60*24)
+    );
+
+    if(
+      diff <=
+      lagerData[produkt].rot
+    ){
+      return "warn-red";
+    }
+  }
+
+  if(
+    tage <=
+    lagerData[produkt].orange
+  ){
+    return "warn-orange";
+  }
+
+  return "warn-green";
+}
+/* === RESTMISCHUNG BULLEN === */
+function buildRestBullen(){
+  let el=document.getElementById("calc");
+  let cow=data.kuehe.items;
+  let total=0;
+  cow.forEach(i=>total+=i.kg);
+
+  let rest=data.restbullen.rest;
+  let ziel=data.restbullen.ziel;
+
+  let rows="";
+let lauf = rest;
+  
+
+let bull = data.bullen.items;
+
+cow.forEach(it=>{
+
+  if(it.kg<=0) return;
+
+  // AGF / MLF nur wenn bei Bullen vorhanden UND kg > 0
+  if(it.type==="agf" || it.type==="mlf"){
+    let exists = bull.some(b => b.type===it.type && b.kg>0);
+    if(!exists) return;
+  }
+
+let bullItem = bull.find(b=>{
+  if(it.type && b.type) return it.type===b.type;
+  return b.name===it.name;
+});
+
+let soll = bullItem
+  ? bullItem.kg * (data.restbullen.anz || ziel / (bullItem.kg||1))
+  : 0;
+
+let anteil = it.kg / total;
+let ist = anteil * rest;
+
+let diff = soll - ist;
+
+let zeit = "-";
+  
+if(it.type==="agf")
+zeit=`<span class="agf">${fmt(Math.abs(diff)/globalCfg.agfKg)}</span>`;
+
+if(it.type==="mlf")
+zeit=`<span class="mlf">${fmt(Math.abs(diff)/globalCfg.mlfKg)}</span>`;
+
+
+  lauf += diff;
+let summe = lauf;
+  
+
+  let cls = diff >= 0 ? "plus" : "minus";
+  let sign = diff >= 0 ? "+" : "";
+
+  let name =
+    it.type==="agf" ? globalCfg.agfName :
+    it.type==="mlf" ? globalCfg.mlfName :
+    it.name;
+
+rows += `
+<tr>
+<td>${name}</td>
+<td>${ist.toFixed(1)}</td>
+<td>${soll.toFixed(1)}</td>
+<td>${zeit}</td>
+<td class="${cls}">${summe.toFixed(1)}</td>
+</tr>`;
+});
+
+  el.innerHTML+=`
+  <div class="category ${data.restbullen.collapsed?'collapsed':''}">
+    <div class="cat-header cat-restbullen"
+      onclick="data.restbullen.collapsed=!data.restbullen.collapsed;buildCalc();">
+      ${globalCfg.restbullenName}
+      <span>${data.restbullen.collapsed?'▼':'▲'}</span>
+    </div>
+
+    <div class="cat-body">
+      Restmischung vorhanden (kg)
+      <input type="number"
+      value="${rest}"
+      oninput="data.restbullen.rest=num(this.value);"
+      onblur="buildCalc()">
+
+      <br><br>
+
+
+      Zielgewicht Bullenration (kg)
+      <input type="number"
+      value="${ziel}"
+      oninput="data.restbullen.ziel=num(this.value);"
+      onblur="buildCalc()">
+
+<br><br>
+
+Bullen (Anzahl)
+<input type="number"
+value="${data.restbullen.anz}"
+onblur="
+data.restbullen.anz = num(this.value);
+
+let proBulle = 0;
+data.bullen.items.forEach(i=>{
+  if(i.kg>0) proBulle += i.kg;
+});
+
+data.restbullen.ziel = data.restbullen.anz * proBulle;
+
+buildCalc();
+">
+
+      <table>
+      <tr>
+      <th>Futter</th>
+      <th>Ist kg</th>
+      <th>Soll kg</th>
+      <th>Zeit</th>
+      <th>Summe</th>
+      </tr>
+
+        ${rows||"<tr><td colspan=5>–</td></tr>"}
+
+      </table>
+
+<div class="total">
+
+<button
+
+class="save-btn
+${alreadySavedToday('bullen')?'saved':''}"
+
+${alreadySavedToday('bullen')?'disabled':''}
+
+onclick="saveHistory('bullen')">
+
+${alreadySavedToday('bullen')
+?'Gespeichert'
+:'Speichern'}
+
+</button>
+
+</div>
+
+    </div>
+  </div>`; 
+}
+function hideWarning(produkt){
+
+  hiddenWarnings[produkt] = getToday();
+
+  saveHiddenWarnings();
+
+  buildCalc();
+}
+
+function buildWarnings(){
+
+  let html = "";
+
+  ["agf","mlf"].forEach(produkt=>{
+
+let resttage = calcResttage(produkt);
+
+let warn =
+getWarnClass(produkt);
+
+if(warn !== "warn-red")
+  return;
+
+    if(hiddenWarnings[produkt] === getToday())
+      return;
+
+    let text = produkt.toUpperCase();
+
+    html += `
+
+    <div class="warning-banner">
+
+      <div>
+      ⚠ ${text} reicht nur noch ca.
+      ${resttage.toFixed(1)} Tage
+      </div>
+
+      <button
+      onclick="hideWarning('${produkt}')">
+
+      Ausblenden
+
+      </button>
+
+    </div>`;
+  });
+
+  return html;
+}
+  
+//rechner//
+
+function buildCalc(){
+  let el=document.getElementById("calc");
+  el.innerHTML="";
+  el.innerHTML += buildWarnings();
+
+  
+  // 👉 Kühe + Färsen
+  ["kuehe","faersen"].forEach(cat=>{
+    let sum=0,lauf=0,rows="";
+    data[cat].items.forEach(it=>{
+      if(it.kg<=0)return;
+      let g=it.kg*data[cat].anz;
+      let name=it.type==="agf"?globalCfg.agfName:
+               it.type==="mlf"?globalCfg.mlfName:it.name;
+      let zeit="-";
+      if(it.type==="agf")zeit=`<span class="agf">${fmt(g/globalCfg.agfKg)}</span>`;
+      if(it.type==="mlf")zeit=`<span class="mlf">${fmt(g/globalCfg.mlfKg)}</span>`;
+      lauf+=g;sum+=g;
+      rows+=`<tr><td>${name}</td><td>${g.toFixed(1)}</td><td>${lauf.toFixed(1)}</td><td>${zeit}</td></tr>`;
+    });
+
+    el.innerHTML+=`
+    <div class="category ${data[cat].collapsed?'collapsed':''}">
+      <div class="cat-header cat-${cat}" onclick="data.${cat}.collapsed=!data.${cat}.collapsed;save();buildCalc();">
+        ${globalCfg[cat+"Name"]}<span>${data[cat].collapsed?'▼':'▲'}</span>
+      </div>
+      <div class="cat-body">
+        Tiere:
+        <input type="number" value="${data[cat].anz}"
+        oninput="data.${cat}.anz=num(this.value);save()"
+        onblur="buildCalc()">
+        <table>
+        <tr><th>Futter</th><th>kg</th><th>Summe</th><th>Zeit</th></tr>
+        ${rows||"<tr><td colspan=4>–</td></tr>"}
+        </table>
+        <div class="total">
+        <span id="total-${cat}" data-val="${sum.toFixed(1)}" onclick="enableTotalEdit('${cat}')">
+        Gesamt: ${sum.toFixed(1)} kg
+        </span>
+
+       <button class="kilo-btn ${kiloMode[cat]?'active':''}"
+onclick="toggleKilo('${cat}')">
+
+kilo
+
+</button>
+
+<button
+
+class="save-btn
+${alreadySavedToday(cat)?'saved':''}"
+
+${alreadySavedToday(cat)?'disabled':''}
+
+onclick="saveHistory('${cat}')">
+
+${alreadySavedToday(cat)?
+'Gespeichert':
+'Speichern'}
+
+</button>
+       
+        
+        </div>
+      </div>
+    </div>`;
+  });
+
+  // 👉 Bullen (ALLEINE)
+  ["bullen"].forEach(cat=>{
+    let sum=0,lauf=0,rows="";
+    data[cat].items.forEach(it=>{
+      if(it.kg<=0)return;
+      let g=it.kg*data[cat].anz;
+      let name=it.type==="agf"?globalCfg.agfName:
+               it.type==="mlf"?globalCfg.mlfName:it.name;
+      let zeit="-";
+      if(it.type==="agf")zeit=`<span class="agf">${fmt(g/globalCfg.agfKg)}</span>`;
+      if(it.type==="mlf")zeit=`<span class="mlf">${fmt(g/globalCfg.mlfKg)}</span>`;
+      lauf+=g;sum+=g;
+      rows+=`<tr><td>${name}</td><td>${g.toFixed(1)}</td><td>${lauf.toFixed(1)}</td><td>${zeit}</td></tr>`;
+    });
+
+    el.innerHTML+=`
+    <div class="category ${data[cat].collapsed?'collapsed':''}">
+      <div class="cat-header cat-${cat}" onclick="data.${cat}.collapsed=!data.${cat}.collapsed;save();buildCalc();">
+        ${globalCfg[cat+"Name"]}<span>${data[cat].collapsed?'▼':'▲'}</span>
+      </div>
+      <div class="cat-body">
+        Tiere:
+        <input type="number" value="${data[cat].anz}"
+        oninput="data.${cat}.anz=num(this.value);save()"
+        onblur="buildCalc()">
+        <table>
+        <tr><th>Futter</th><th>kg</th><th>Summe</th><th>Zeit</th></tr>
+        ${rows||"<tr><td colspan=4>–</td></tr>"}
+        </table>
+        <div class="total">
+        <span id="total-${cat}" data-val="${sum.toFixed(1)}" onclick="enableTotalEdit('${cat}')">
+        Gesamt: ${sum.toFixed(1)} kg
+        </span>
+      <button class="kilo-btn ${kiloMode[cat]?'active':''}"
+onclick="toggleKilo('${cat}')">
+
+kilo
+
+</button>
+
+<button
+
+class="save-btn
+${alreadySavedToday(cat)?'saved':''}"
+
+${alreadySavedToday(cat)?'disabled':''}
+
+onclick="saveHistory('${cat}')">
+
+${alreadySavedToday(cat)?
+'Gespeichert':
+'Speichern'}
+
+</button>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  // 👉 RESTMISCHUNG JETZT RICHTIG UNTER BULLEN
+  buildRestBullen();
+
+  // 👉 Restliche Kategorien
+  ["trocken","kaelber"].forEach(cat=>{
+    let sum=0,lauf=0,rows="";
+    data[cat].items.forEach(it=>{
+      if(it.kg<=0)return;
+      let g=it.kg*data[cat].anz;
+      let name=it.type==="agf"?globalCfg.agfName:
+               it.type==="mlf"?globalCfg.mlfName:it.name;
+      let zeit="-";
+      if(it.type==="agf")zeit=`<span class="agf">${fmt(g/globalCfg.agfKg)}</span>`;
+      if(it.type==="mlf")zeit=`<span class="mlf">${fmt(g/globalCfg.mlfKg)}</span>`;
+      lauf+=g;sum+=g;
+      rows+=`<tr><td>${name}</td><td>${g.toFixed(1)}</td><td>${lauf.toFixed(1)}</td><td>${zeit}</td></tr>`;
+    });
+
+    el.innerHTML+=`
+    <div class="category ${data[cat].collapsed?'collapsed':''}">
+      <div class="cat-header cat-${cat}" onclick="data.${cat}.collapsed=!data.${cat}.collapsed;save();buildCalc();">
+        ${globalCfg[cat+"Name"]}<span>${data[cat].collapsed?'▼':'▲'}</span>
+      </div>
+      <div class="cat-body">
+        Tiere:
+        <input type="number" value="${data[cat].anz}"
+        oninput="data.${cat}.anz=num(this.value);save()"
+        onblur="buildCalc()">
+        <table>
+        <tr><th>Futter</th><th>kg</th><th>Summe</th><th>Zeit</th></tr>
+        ${rows||"<tr><td colspan=4>–</td></tr>"}
+        </table>
+        <div class="total">
+        <span id="total-${cat}" data-val="${sum.toFixed(1)}" onclick="enableTotalEdit('${cat}')">
+        Gesamt: ${sum.toFixed(1)} kg
+        </span>
+       <button class="kilo-btn ${kiloMode[cat]?'active':''}"
+onclick="toggleKilo('${cat}')">
+
+kilo
+
+</button>
+
+<button
+
+class="save-btn
+${alreadySavedToday(cat)?'saved':''}"
+
+${alreadySavedToday(cat)?'disabled':''}
+
+onclick="saveHistory('${cat}')">
+
+${alreadySavedToday(cat)?
+'Gespeichert':
+'Speichern'}
+
+</button>
+        </div>
+      </div>
+    </div>`;
+  });
+}
+
+
+
+/* === SETTINGS === */
+
+  function buildSettings(){
+  let s=document.getElementById("settings");
+
+  s.innerHTML=`
+  <h3>Sortierung</h3>
+  <button class="${sortMode?'sort-active':''}" onclick="toggleSort()">
+  ${sortMode?'Sortieren beenden':'Sortieren aktivieren'}
+  </button><hr>
+<h3>Bundesland</h3>
+
+<select
+onchange="
+globalCfg.bundesland=this.value;
+saveGlobal();
+">
+
+<option value="Baden-Württemberg"
+${globalCfg.bundesland==="Baden-Württemberg"?"selected":""}>
+Baden-Württemberg
+</option>
+
+<option value="Bayern"
+${globalCfg.bundesland==="Bayern"?"selected":""}>
+Bayern
+</option>
+
+<option value="Berlin"
+${globalCfg.bundesland==="Berlin"?"selected":""}>
+Berlin
+</option>
+
+<option value="Brandenburg"
+${globalCfg.bundesland==="Brandenburg"?"selected":""}>
+Brandenburg
+</option>
+
+<option value="Bremen"
+${globalCfg.bundesland==="Bremen"?"selected":""}>
+Bremen
+</option>
+
+<option value="Hamburg"
+${globalCfg.bundesland==="Hamburg"?"selected":""}>
+Hamburg
+</option>
+
+<option value="Hessen"
+${globalCfg.bundesland==="Hessen"?"selected":""}>
+Hessen
+</option>
+
+<option value="Mecklenburg-Vorpommern"
+${globalCfg.bundesland==="Mecklenburg-Vorpommern"?"selected":""}>
+Mecklenburg-Vorpommern
+</option>
+
+<option value="Niedersachsen"
+${globalCfg.bundesland==="Niedersachsen"?"selected":""}>
+Niedersachsen
+</option>
+
+<option value="Nordrhein-Westfalen"
+${globalCfg.bundesland==="Nordrhein-Westfalen"?"selected":""}>
+Nordrhein-Westfalen
+</option>
+
+<option value="Rheinland-Pfalz"
+${globalCfg.bundesland==="Rheinland-Pfalz"?"selected":""}>
+Rheinland-Pfalz
+</option>
+
+<option value="Saarland"
+${globalCfg.bundesland==="Saarland"?"selected":""}>
+Saarland
+</option>
+
+<option value="Sachsen"
+${globalCfg.bundesland==="Sachsen"?"selected":""}>
+Sachsen
+</option>
+
+<option value="Sachsen-Anhalt"
+${globalCfg.bundesland==="Sachsen-Anhalt"?"selected":""}>
+Sachsen-Anhalt
+</option>
+
+<option value="Schleswig-Holstein"
+${globalCfg.bundesland==="Schleswig-Holstein"?"selected":""}>
+Schleswig-Holstein
+</option>
+
+<option value="Thüringen"
+${globalCfg.bundesland==="Thüringen"?"selected":""}>
+Thüringen
+</option>
+
+</select>
+
+<hr>
+  <h3>AGF / MLF</h3>
+  AGF Name <input value="${globalCfg.agfName}" 
+    oninput="globalCfg.agfName=this.value;saveGlobal();buildCalc();" 
+    onblur="buildSettings();"><br>
+
+  kg/s <input type="number" value="${globalCfg.agfKg}" 
+    oninput="globalCfg.agfKg=num(this.value)||0.01;saveGlobal();buildCalc();"><br><br>
+
+  MLF Name <input value="${globalCfg.mlfName}" 
+    oninput="globalCfg.mlfName=this.value;saveGlobal();buildCalc();" 
+    onblur="buildSettings();"><br>
+
+  kg/s <input type="number" value="${globalCfg.mlfKg}" 
+    oninput="globalCfg.mlfKg=num(this.value)||0.01;saveGlobal();buildCalc();"><hr>
+  `;
+
+  // 👉 Restmischung Name
+  s.innerHTML+=`
+  <h3 class="editable" id="edit-restbullen">
+  ${globalCfg.restbullenName}<span class="stift">✎</span>
+  </h3>
+  `;
+
+  // 👉 Kategorien aufbauen
+  ["kuehe","faersen","bullen","trocken","kaelber"].forEach(cat=>{
+    s.innerHTML+=`
+    <h3 class="editable" id="edit-${cat}">
+    ${globalCfg[cat+"Name"]}<span class="stift">✎</span>
+    </h3>
+    `;
+
+    data[cat].items.forEach((it,i)=>{
+      let name=it.type==="agf"?globalCfg.agfName:
+               it.type==="mlf"?globalCfg.mlfName:it.name;
+
+      s.innerHTML+=`
+      <div class="sort-row">
+        ${sortMode?`
+        <div class="sort-arrows">
+          <button class="sort-btn" onclick="moveItem('${cat}',${i},-1)">▲</button>
+          <button class="sort-btn" onclick="moveItem('${cat}',${i},1)">▼</button>
+        </div>`:`<div></div>`}
+        
+        <div>
+          <input type="text" value="${name}" oninput="
+            if('${it.type}'==='agf'){globalCfg.agfName=this.value;saveGlobal();}
+            else if('${it.type}'==='mlf'){globalCfg.mlfName=this.value;saveGlobal();}
+            else{data['${cat}'].items[${i}].name=this.value;save();}
+            buildCalc();
+          ">
+
+          <input type="number" value="${it.kg}" 
+          oninput="data['${cat}'].items[${i}].kg=num(this.value);save();buildCalc();">
+        </div>
+      </div>`;
+    });
+  });
+
+  // 👉 EVENTS (JETZT RICHTIG!)
+  ["kuehe","faersen","bullen","trocken","kaelber"].forEach(cat=>{
+    let el=document.getElementById("edit-"+cat);
+    if(!el) return;
+
+    el.onclick=()=>{
+      let input=document.createElement("input");
+      input.value=globalCfg[cat+"Name"];
+
+      input.onblur=()=>{
+        globalCfg[cat+"Name"]=input.value||globalCfg[cat+"Name"];
+        saveGlobal();
+        buildSettings();
+        buildCalc();
+      };
+
+      el.replaceWith(input);
+      input.focus();
+    };
+  });
+
+  // 👉 Restbullen Event
+  let elRest=document.getElementById("edit-restbullen");
+  elRest.onclick=()=>{
+    let input=document.createElement("input");
+    input.value=globalCfg.restbullenName;
+
+    input.onblur=()=>{
+      globalCfg.restbullenName=input.value||globalCfg.restbullenName;
+      saveGlobal();
+      buildSettings();
+      buildCalc();
+    };
+
+    elRest.replaceWith(input);
+    input.focus();
+  };
+}
+function addLieferung(){
+
+  let produkt =
+  document.getElementById("liefer-produkt").value;
+
+  let datum =
+  document.getElementById("liefer-datum").value;
+
+  let menge =
+  num(document.getElementById("liefer-menge").value);
+
+  if(menge<=0){
+
+    alert("Menge fehlt");
+
+    return;
+  }
+
+  let eintrag = {
+
+    id:
+    Date.now()+
+    Math.random().toString(36).substr(2,5),
+
+    produkt:produkt,
+
+    datum:formatDateInput(datum),
+
+    menge:menge
+  };
+
+  lieferungen.unshift(eintrag);
+
+  lagerData[produkt].bestand += menge;
+
+  saveLieferungen();
+
+  saveLagerStorage();
+
+  buildHistory();
+
+  buildCalc();
+
+  alert("Lieferung gespeichert");
+}
+
+function deleteLieferung(id){
+
+  let eintrag =
+  lieferungen.find(l=>l.id===id);
+
+  if(!eintrag) return;
+
+  lagerData[eintrag.produkt].bestand -=
+  eintrag.menge;
+
+  lieferungen =
+  lieferungen.filter(l=>l.id!==id);
+
+  saveLieferungen();
+
+  saveLagerStorage();
+
+  buildHistory();
+
+  buildCalc();
+
+  alert("Lieferung gelöscht");
+}
+
+function deleteHistory(id){
+
+  let eintrag =
+  historyData.find(h=>h.id===id);
+
+  if(!eintrag) return;
+
+  lagerData.agf.bestand +=
+  eintrag.agf || 0;
+
+  lagerData.mlf.bestand +=
+  eintrag.mlf || 0;
+
+  historyData =
+  historyData.filter(h=>h.id!==id);
+
+  saveHistoryStorage();
+
+  saveLagerStorage();
+
+  buildHistory();
+
+  buildCalc();
+
+  alert("Tageslog gelöscht");
+}
+
+function buildHistory(){
+
+  let h = document.getElementById("history");
+
+  let agfRest = calcResttage("agf");
+
+  let mlfRest = calcResttage("mlf");
+
+  h.innerHTML = `
+
+<div class="history-box ${historyCollapsed.tageslog?'collapsed':''}">
+
+  <div class="history-header"
+
+  onclick="historyCollapsed.tageslog=
+  !historyCollapsed.tageslog;
+
+  buildHistory();">
+
+  Tageslog
+
+  </div>
+
+  <div class="cat-body">
+
+  ${Object.entries(
+
+    historyData.reduce((acc,e)=>{
+
+      if(!acc[e.datum])
+        acc[e.datum]=[];
+
+      acc[e.datum].push(e);
+
+      return acc;
+
+    },{})
+
+  ).map(([datum,eintraege],index)=>`
+
+    <div
+    style="
+    margin-bottom:20px;
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid #d5dbe0;
+    ">
+
+      <div
+
+      onclick="
+      let el=this.nextElementSibling;
+
+      el.style.display=
+      el.style.display==='none'
+      ?'block'
+      :'none';
+      "
+
+      style="
+      background:#2f3b45;
+      color:white;
+      padding:14px;
+      font-size:22px;
+      font-weight:bold;
+      cursor:pointer;
+      ">
+
+      ${index===0?'▼':'▶'}
+      ${datum}
+
+      </div>
+
+      <div
+      style="
+      display:${index===0?'block':'none'};
+      background:#fff;
+      padding:14px;
+      ">
+
+      ${eintraege.map(e=>`
+
+        <div class="history-item"
+
+        style="
+        padding:16px;
+        margin-bottom:14px;
+        border-radius:10px;
+        background:#f8fafc;
+        ">
+
+        <div
+        style="
+        font-size:24px;
+        font-weight:bold;
+        margin-bottom:12px;
+        ">
+
+        ${globalCfg[e.kategorie+"Name"] || e.kategorie}
+
+        </div>
+
+        <div style="margin-bottom:10px;">
+
+        ${e.futter && e.futter.length ?
+
+        e.futter.map(f=>`
+
+        <div style="
+        display:flex;
+        justify-content:space-between;
+        padding:5px 0;
+        border-bottom:1px solid #ddd;
+        ">
+
+        <span>${f.name}</span>
+
+        <span>${f.kg.toFixed(1)} kg</span>
+
+        </div>
+
+        `).join("")
+
+        :
+
+        "Keine Einzelwerte gespeichert"
+
+        }
+
+         </div>
+
+        <div style="
+        margin-top:12px;
+        font-weight:bold;
+        ">
+
+        Tiere:
+        ${e.tiere}
+
+        <br>
+
+        Gesamt:
+        ${e.gesamt.toFixed(1)} kg
+
+        <br><br>
+
+<button
+
+class="save-btn"
+
+onclick="deleteHistory('${e.id}')">
+
+Löschen
+
+</button>
+
+        </div>
+
+        </div>
+
+      `).join("")}
+
+      </div>
+
+    </div>
+
+  `).join("")}
+
+  </div>
+
+</div>
+
+
+  <div class="history-box ${historyCollapsed.lager?'collapsed':''}">
+
+    <div class="history-header"
+
+    onclick="historyCollapsed.lager=!historyCollapsed.lager;buildHistory();">
+
+    Lagerbestand
+
+    </div>
+
+    <div class="cat-body">
+
+      <div class="lager-card">
+
+      <b>${globalCfg.agfName}</b><br>
+
+      Bestand:
+      ${lagerData.agf.bestand.toFixed(1)} kg<br>
+
+      Ø Verbrauch:
+      ${calcAverage("agf").toFixed(1)} kg/Tag<br>
+
+      <span class="${getWarnClass("agf")}">
+
+   ${agfRest<=0
+
+?"Bestand leer"
+
+:`Reicht noch ca.
+${agfRest.toFixed(1)} Tage`
+
+}
+
+<br><br>
+
+Bestellen bis:
+
+<br>
+
+${formatDatum(
+  getBestellDatum("agf")
+)}
+
+      </span>
+
+      </div>
+
+
+      <div class="lager-card">
+
+      <b>${globalCfg.mlfName}</b><br>
+
+      Bestand:
+      ${lagerData.mlf.bestand.toFixed(1)} kg<br>
+
+      Ø Verbrauch:
+      ${calcAverage("mlf").toFixed(1)} kg/Tag<br>
+
+      <span class="${getWarnClass("mlf")}">
+
+  ${mlfRest<=0
+
+?"Bestand leer"
+
+:`Reicht noch ca.
+${mlfRest.toFixed(1)} Tage`
+
+}
+
+<br><br>
+
+Bestellen bis:
+
+<br>
+
+${formatDatum(
+  getBestellDatum("mlf")
+)}
+
+      </span>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="history-box ${historyCollapsed.lieferungen?'collapsed':''}">
+
+    <div class="history-header"
+
+    onclick="historyCollapsed.lieferungen=!historyCollapsed.lieferungen;buildHistory();">
+
+    Lieferungen
+
+    </div>
+
+    <div class="cat-body">
+
+      <div class="delivery-form">
+
+      <select id="liefer-produkt">
+
+<option value="agf">
+${globalCfg.agfName}
+</option>
+
+<option value="mlf">
+${globalCfg.mlfName}
+</option>
+
+      </select>
+
+      <input type="date" id="liefer-datum">
+
+      <input
+      type="number"
+      id="liefer-menge"
+      placeholder="Menge in kg">
+
+      <button
+      class="save-btn"
+      onclick="addLieferung()">
+
+      Lieferung speichern
+
+      </button>
+
+      </div>
+
+    </div>
+<br>
+
+${lieferungen.map(l=>`
+
+<div class="history-item"
+
+style="
+padding:14px;
+margin-bottom:10px;
+background:#f8fafc;
+border-radius:10px;
+">
+
+<div style="
+font-size:20px;
+font-weight:bold;
+margin-bottom:8px;
+">
+
+${l.produkt==="agf"
+?globalCfg.agfName
+:globalCfg.mlfName}
+
+</div>
+
+Datum:
+${l.datum}
+
+<br>
+
+Menge:
+${l.menge.toFixed(1)} kg
+<br><br>
+
+<button
+
+class="save-btn"
+
+onclick="deleteLieferung('${l.id}')">
+
+Löschen
+
+</button>
+
+</div>
+
+`).join("")}
+
+</div>
+
+<div class="history-box ${historyCollapsed.verlauf?'collapsed':''}">
+
+    <div class="history-header"
+
+    onclick="historyCollapsed.verlauf=!historyCollapsed.verlauf;buildHistory();">
+
+    Warnstufen
+
+    </div>
+
+    <div class="cat-body">
+
+    ${globalCfg.agfName} Orange
+
+    <input
+    type="number"
+    value="${lagerData.agf.orange}"
+
+    oninput="
+lagerData.agf.orange=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+
+${globalCfg.agfName} Rot
+
+<input
+type="number"
+value="${lagerData.agf.rot}"
+
+oninput="
+lagerData.agf.rot=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+
+    <br><br>
+
+   ${globalCfg.mlfName} Orange
+
+    <input
+    type="number"
+    value="${lagerData.mlf.orange}"
+
+    oninput="
+lagerData.mlf.orange=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+
+${globalCfg.mlfName} Rot
+
+<input
+type="number"
+value="${lagerData.mlf.rot}"
+
+oninput="
+lagerData.mlf.rot=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+    </div>
+
+  </div>`;
+  updateHistoryTabColor();
+
+}
+
+function updateHistoryTabColor(){
+
+  let tab =
+  document.getElementById("history-tab");
+
+  if(!tab) return;
+
+  tab.classList.remove(
+    "tab-red",
+    "tab-orange"
+  );
+
+  let agf =
+  getWarnClass("agf");
+
+  let mlf =
+  getWarnClass("mlf");
+
+  if(
+    agf==="warn-red" ||
+    mlf==="warn-red"
+  ){
+    tab.classList.add("tab-red");
+  }
+
+  else if(
+    agf==="warn-orange" ||
+    mlf==="warn-orange"
+  ){
+    tab.classList.add("tab-orange");
+  }
+}
+/* === CALCULATOR === */
+let expr="",history=JSON.parse(localStorage.getItem("calcHist"))||[];
+
+  let historyWarnClass = "";
+
+function press(v){
+  if(v==="C"){expr="";update();return;}
+
+  if(v==="⌫"){
+    expr = expr.slice(0,-1);
+    update();
+    return;
+  }
+
+  if(v==="="){
+    try{
+      let r=eval(expr);
+      history.unshift(expr+" = "+r);
+      history=history.slice(0,20);
+      localStorage.setItem("calcHist",JSON.stringify(history));
+      expr=""+r;
+    }catch{expr="";}
+    update();renderHist();return;
+  }
+
+  expr+=v;
+  update();
+}
+
+  
+function update(){document.getElementById("disp").innerText=expr||"0";}
+function renderHist(){document.getElementById("hist").innerHTML=history.map(h=>"<div>"+h+"</div>").join("");}
+function buildCalc2(){
+  document.getElementById("calc2").innerHTML=`
+  <div class="calc-box">
+  <div id="disp" class="calc-display">0</div>
+  <div class="calc-grid">
+  ${["7","8","9","/","4","5","6","*","1","2","3","-","C","0",".","⌫","=","+"]
+  .map(v=>`<button class="calc-btn ${v=="="? "eq": "+-*/".includes(v)? "op": v=="C"? "clear": ""}"
+  onclick="press('${v}')">${v}</button>`).join("")}
+  </div><div id="hist" class="calc-history"></div></div>`;
+  renderHist();
+}
+
+// 🔐 Zugriff Funktionen
+
+function showRequestForm(){
+  document.getElementById("accessBlock").style.display="flex";
+}
+
+async function anfrageSenden(){
+  let vorname = document.getElementById("vorname").value.trim();
+  let nachname = document.getElementById("nachname").value.trim();
+  let email = document.getElementById("email").value.trim();
+  let zustimmung = document.getElementById("zustimmung").checked;
+
+  console.log("DEBUG:", vorname, nachname, email);
+
+  if(vorname === "" || nachname === "" || email === ""){
+    alert("Bitte alles ausfüllen");
+    return;
+  }
+
+  if(!zustimmung){
+    alert("Bitte Zustimmung bestätigen");
+    return;
+  }
+
+  // 🔥 speichern
+  const docRef = await db.collection("anfragen").add({
+    vorname, nachname, email,
+    status:"offen",
+    deviceID
+  });
+
+  // 🔗 Links erstellen (JETZT RICHTIG!)
+let approveLink = "https://taupke-pixel.github.io/Futterrechner/?approve=" + docRef.id;
+let denyLink = "https://taupke-pixel.github.io/Futterrechner/?deny=" + docRef.id;
+
+  // 📧 Mail senden
+  emailjs.send("service_6z9n3x9", "template_e598pub", {
+    name: vorname+" "+nachname,
+    email: email,
+    approve_link: approveLink,
+    deny_link: denyLink
+  });
+
+  alert("Anfrage gesendet");
+}
+
+async function checkAccess(){
+  console.log("checkAccess startet");
+
+  try{
+    const doc = await db.collection("zugriffe").doc(deviceID).get();
+
+    if(!doc.exists || doc.data().status !== "erlaubt"){
+      console.log("kein Zugriff → Formular");
+      showRequestForm();
+      return false;
+    }
+
+    console.log("Zugriff erlaubt");
+    return true;
+
+  } catch(e){
+    console.log("FEHLER:", e);
+    showRequestForm();
+    return false;
+  }
+}
+
+/* START */
+async function handleApproval(){
+  console.log("APPROVE ID:", approveID);
+
+  if(approveID){
+    console.log("Freigabe erkannt");
+
+    await db.collection("anfragen").doc(approveID).update({
+      status: "erlaubt"
+    });
+
+    const req = await db.collection("anfragen").doc(approveID).get();
+    const devID = req.data().deviceID;
+
+    await db.collection("zugriffe").doc(devID).set({
+      status: "erlaubt"
+    });
+
+    alert("Zugriff erlaubt!");
+
+    window.location.href = "https://taupke-pixel.github.io/Futterrechner/";
+  }
+
+  if(denyID){
+    await db.collection("anfragen").doc(denyID).update({
+      status: "abgelehnt"
+    });
+
+    alert("Zugriff abgelehnt!");
+
+    window.location.href = "https://taupke-pixel.github.io/Futterrechner/";
+  }
+}
+
+  handleApproval().then(()=>{
+  checkAccess().then(ok=>{
+    if(ok){
+      
+      buildCalc();
+      buildSettings();
+      buildCalc2();
+    buildHistory();
+      updateHistoryTabColor();
+    }
+  });
+});
+  
+</script>
+
+<div id="accessBlock" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:white;padding:30px;border-radius:10px;width:300px;text-align:center;">
+    <h2>Zugriff anfragen</h2>
+
+    <input id="vorname" placeholder="Vorname"><br>
+    <input id="nachname" placeholder="Nachname"><br>
+    <input id="email" placeholder="E-Mail"><br>
+
+    <label style="font-size:12px;">
+      <input type="checkbox" id="zustimmung">
+      Zustimmung zur Datenspeicherung
+    </label><br><br>
+
+    <button onclick="anfrageSenden()">Anfrage senden</button>
+  </div>
+</div></body>
+</html>
