@@ -1519,22 +1519,7 @@ function buildHistory(){
 
 <div class="cat-body">
 
-${getKategorien().map(cat=>`
-
-<div
-style="
-margin-bottom:12px;
-padding:14px;
-background:#f8fafc;
-border-radius:10px;
-font-weight:bold;
-">
-
-${getKategorieName(cat)}
-
-</div>
-
-`).join("")}
+  ${Object.entries(
 
     historyData.reduce((acc,e)=>{
 
