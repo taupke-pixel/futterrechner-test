@@ -495,7 +495,6 @@ function saveHistory(cat){
 
   buildHistory();
 
-  alert("Gespeichert");
 }
   function calcAverage(produkt){
 
@@ -1458,7 +1457,41 @@ function deleteHistory(id){
 
   alert("Tageslog gelöscht");
 }
+  
+function getKategorieName(cat){
 
+  return globalCfg[
+    cat + "Name"
+  ] || cat;
+}
+
+function getLogsByKategorie(cat){
+
+  return historyData.filter(e=>
+
+    e.kategorie === cat
+
+  );
+}
+
+function hatLogs(cat){
+
+  return getLogsByKategorie(cat)
+  .length > 0;
+}
+
+function getKategorien(){
+
+  return [
+    "kuehe",
+    "bullen",
+    "faersen",
+    "kaelber",
+    "trocken",
+    "restbullen"
+  ];
+}
+  
 function buildHistory(){
 
   let h = document.getElementById("history");
