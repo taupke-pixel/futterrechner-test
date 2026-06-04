@@ -1516,8 +1516,45 @@ function buildHistory(){
   Tageslog
 
   </div>
+<div class="history-header"
+
+onclick="historyCollapsed.tageslog=
+!historyCollapsed.tageslog;
+
+buildHistory();">
+
+Tageslog
+
+</div>
 
 <div class="cat-body">
+
+<div
+style="
+margin-bottom:20px;
+padding:12px;
+background:#eef3f7;
+border-radius:10px;
+">
+
+${getKategorien().map(cat=>`
+
+<div
+style="
+padding:10px;
+margin-bottom:8px;
+background:#fff;
+border-radius:8px;
+font-weight:bold;
+">
+
+${getKategorieName(cat)}
+
+</div>
+
+`).join("")}
+
+</div>
 
   ${Object.entries(
 
