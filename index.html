@@ -1520,6 +1520,17 @@ function hatLogs(cat){
 
   return monate.sort((a,b)=>b-a);
 }
+function getMonatsLogs(cat,jahr,monat){
+
+  return getLogsByKategorie(cat)
+
+  .filter(e=>
+
+    e.datum.split(".")[2]===jahr &&
+    e.datum.split(".")[1]===monat
+
+  );
+}  
 
 function getKategorien(){
 
@@ -1669,14 +1680,29 @@ Monatssumme
 
 <br><br>
 
+Gesamt:
+${getMonatsLogs(cat,jahr,monat)
+.reduce((s,e)=>s+e.gesamt,0)
+.toFixed(1)} kg
+
+<br>
+
+AGF:
+${getMonatsLogs(cat,jahr,monat)
+.reduce((s,e)=>s+e.agf,0)
+.toFixed(1)} kg
+
+<br>
+
+MLF:
+${getMonatsLogs(cat,jahr,monat)
+.reduce((s,e)=>s+e.mlf,0)
+.toFixed(1)} kg
+
+<br><br>
+
 Anzahl Logs:
-${getLogsByKategorie(cat).filter(e=>
-
-  e.datum.split(".")[2]===jahr &&
-  e.datum.split(".")[1]===monat
-
-).length}
-
+${getMonatsLogs(cat,jahr,monat).length}
 </div>
 
 ` : ""}
