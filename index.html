@@ -1485,11 +1485,6 @@ function buildHistory(){
   </div>
 
   <div class="cat-body">
-
- ${getKategorien().map(cat=>`
-
-<div
-
 ${getKategorien().map(cat=>`
 
 <div
@@ -1507,16 +1502,6 @@ ${getKategorieName(cat)}
 
 `).join("")}
 
-style="
-padding:10px;
-margin-bottom:8px;
-background:#eef3f7;
-border-radius:8px;
-font-weight:bold;
-cursor:pointer;
-">
-
-${historyCollapsed.kategorien[cat] ? "▼" : "▶"}
 ${getKategorieName(cat)}
 
 </div>
