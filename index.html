@@ -332,8 +332,9 @@ let historyCollapsed = {
   lieferungen:false,
   verlauf:false,
 
-  kategorien:{},
-jahre:{}
+kategorien:{},
+jahre:{},
+monate:{}
 
 };
 
@@ -1504,6 +1505,30 @@ function getKategorieName(cat){
   return jahre.sort((a,b)=>b-a);
 
 }
+  function getMonate(cat,jahr){
+
+  let monate = [
+
+    ...new Set(
+
+      historyData
+
+      .filter(e=>
+        e.kategorie===cat &&
+        e.datum.split(".")[2]===jahr
+      )
+
+      .map(e=>
+        e.datum.split(".")[1]
+      )
+
+    )
+
+  ];
+
+  return monate.sort((a,b)=>b-a);
+
+}
   
 function buildHistory(){
 
@@ -1591,13 +1616,51 @@ ${historyCollapsed.jahre[cat+"_"+jahr] ? `
 <div
 style="
 margin-left:20px;
+">
+
+${getMonate(cat,jahr).map(monat=>`
+
+<div
+
+onclick="
+historyCollapsed.monate['${cat}_${jahr}_${monat}']=
+!historyCollapsed.monate['${cat}_${jahr}_${monat}'];
+
+buildHistory();
+"
+
+style="
+padding:8px;
+margin-bottom:6px;
+background:#eef3f7;
+border-radius:8px;
+cursor:pointer;
+font-weight:bold;
+">
+
+${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? "▼" : "▶"}
+${monat}.${jahr}
+
+</div>
+
+${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? `
+
+<div
+style="
+margin-left:20px;
 padding:8px;
 background:#fff;
 border-radius:8px;
 margin-bottom:6px;
 ">
 
-Jahr geöffnet
+Monat geöffnet
+
+</div>
+
+` : ""}
+
+`).join("")}
 
 </div>
 
