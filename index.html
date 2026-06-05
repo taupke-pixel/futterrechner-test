@@ -2032,10 +2032,15 @@ border-bottom:1px solid #eee;
 `).join("")}
 
 <br>
-  ${Object.entries(
+${Object.entries(
 
-    historyData.reduce((acc,e)=>{
+    historyData
 
+    .filter(e=>
+      e.datum===getToday()
+    )
+
+    .reduce((acc,e)=>{
       if(!acc[e.datum])
         acc[e.datum]=[];
 
