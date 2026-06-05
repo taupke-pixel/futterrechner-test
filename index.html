@@ -1787,6 +1787,26 @@ ${e.tiere}
 Gesamt:
 ${e.gesamt.toFixed(1)} kg
 
+<br><br>
+
+${e.futter.map(f=>`
+
+<div
+style="
+display:flex;
+justify-content:space-between;
+padding:4px 0;
+border-bottom:1px solid #eee;
+">
+
+<span>${f.name}</span>
+
+<span>${f.kg.toFixed(1)} kg</span>
+
+</div>
+
+`).join("")}
+
 </div>
 
 `).join("")}
