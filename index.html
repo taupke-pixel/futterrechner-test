@@ -1753,23 +1753,14 @@ margin-left:20px;
 ${getWochen(cat,jahr,monat).map(woche=>`
 
 <div
-
-onclick="
-historyCollapsed.wochen['${cat}_${jahr}_${monat}_${woche}']=
-!historyCollapsed.wochen['${cat}_${jahr}_${monat}_${woche}'];
-buildHistory();
-"
-
 style="
 padding:10px;
 margin-bottom:6px;
 background:#f8fafc;
 border-radius:8px;
-cursor:pointer;
 ">
 
-${historyCollapsed.wochen[cat+"_"+jahr+"_"+monat+"_"+woche] ? "▼" : "▶"}
-${woche}
+▶ ${woche}
 
 </div>
 
