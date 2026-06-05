@@ -1531,6 +1531,45 @@ function getMonatsLogs(cat,jahr,monat){
 
   );
 }  
+  function getWochen(cat,jahr,monat){
+
+  let logs = getMonatsLogs(
+    cat,
+    jahr,
+    monat
+  );
+
+  let wochen = {};
+
+  logs.forEach(e=>{
+
+    let teile =
+    e.datum.split(".");
+
+    let tag =
+    parseInt(teile[0]);
+
+    let start =
+    Math.floor((tag-1)/7)*7+1;
+
+    let ende =
+    start+6;
+
+    let key =
+    String(start).padStart(2,"0")
+    + "."
+    + monat
+    + " - "
+    + String(ende).padStart(2,"0")
+    + "."
+    + monat;
+
+    wochen[key]=true;
+
+  });
+
+  return Object.keys(wochen);
+}
 
 function getKategorien(){
 
@@ -1699,10 +1738,33 @@ ${getMonatsLogs(cat,jahr,monat)
 .reduce((s,e)=>s+e.mlf,0)
 .toFixed(1)} kg
 
-<br><br>
 
-Anzahl Logs:
-${getMonatsLogs(cat,jahr,monat).length}
+</div>
+
+` : ""}
+${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? `
+
+<div
+style="
+margin-left:20px;
+">
+
+${getWochen(cat,jahr,monat).map(woche=>`
+
+<div
+style="
+padding:10px;
+margin-bottom:6px;
+background:#f8fafc;
+border-radius:8px;
+">
+
+▶ ${woche}
+
+</div>
+
+`).join("")}
+
 </div>
 
 ` : ""}
