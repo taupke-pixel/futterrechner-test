@@ -1481,6 +1481,21 @@ function hatLogs(cat){
   return getLogsByKategorie(cat)
   .length > 0;
 }
+  function getJahre(cat){
+
+  let jahre = [
+
+    ...new Set(
+
+      getLogsByKategorie(cat)
+      .map(e => e.datum.split(".")[2])
+
+    )
+
+  ];
+
+  return jahre.sort((a,b)=>b-a);
+}
 
 function getKategorien(){
 
