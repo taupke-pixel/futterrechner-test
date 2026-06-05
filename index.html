@@ -2506,6 +2506,49 @@ function exportBackup(){
   a.click();
 
 }
+  function importBackup(event){
+
+  let file =
+  event.target.files[0];
+
+  if(!file) return;
+
+  let reader =
+  new FileReader();
+
+  reader.onload = function(e){
+
+    let backup =
+    JSON.parse(e.target.result);
+
+    historyData =
+    backup.historyData || [];
+
+    lagerData =
+    backup.lagerData || lagerData;
+
+    lieferungen =
+    backup.lieferungen || [];
+
+    globalCfg =
+    backup.globalCfg || globalCfg;
+
+    hiddenWarnings =
+    backup.hiddenWarnings || {};
+
+    saveHistoryStorage();
+    saveLagerStorage();
+
+    buildCalc();
+    buildHistory();
+
+    alert("Backup geladen");
+
+  };
+
+  reader.readAsText(file);
+
+}
 function updateHistoryTabColor(){
 
   let tab =
