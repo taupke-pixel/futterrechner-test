@@ -1480,6 +1480,30 @@ function getKategorieName(cat){
   ] || cat;
 
 }
+  function getJahre(cat){
+
+  let jahre = [
+
+    ...new Set(
+
+      historyData
+
+      .filter(e=>
+        e.kategorie===cat
+      )
+
+      .map(e=>
+        e.datum.split(".")[2]
+      )
+
+    )
+
+  ];
+
+  return jahre.sort((a,b)=>b-a);
+
+}
+  
 function buildHistory(){
 
   let h = document.getElementById("history");
