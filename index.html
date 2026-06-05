@@ -1768,13 +1768,24 @@ ${getTage(cat,jahr,monat,woche).map(e=>`
 
 <div
 style="
-padding:8px;
-margin-bottom:6px;
+padding:10px;
+margin-bottom:8px;
 background:#fff;
 border-radius:8px;
+border:1px solid #ddd;
 ">
 
-${e.datum}
+<b>${e.datum}</b>
+
+<br>
+
+Tiere:
+${e.tiere}
+
+<br>
+
+Gesamt:
+${e.gesamt.toFixed(1)} kg
 
 </div>
 
