@@ -1654,6 +1654,32 @@ ${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? "▼" : "▶"}
 ${monat}.${jahr}
 
 </div>
+${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? `
+
+<div
+style="
+margin-left:20px;
+padding:10px;
+background:#eef3f7;
+border-radius:8px;
+margin-bottom:8px;
+">
+
+Monatssumme
+
+<br><br>
+
+Anzahl Logs:
+${getLogsByKategorie(cat).filter(e=>
+
+  e.datum.split(".")[2]===jahr &&
+  e.datum.split(".")[1]===monat
+
+).length}
+
+</div>
+
+` : ""}
 
 `).join("")}
 
