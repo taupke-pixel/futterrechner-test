@@ -1731,7 +1731,30 @@ ${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? `
 style="
 margin-left:20px;
 ">
+<div
+style="
+padding:10px;
+margin-bottom:10px;
+background:#eef3f7;
+border-radius:8px;
+font-weight:bold;
+">
 
+Monatssumme
+
+<br><br>
+
+Gesamt:
+${historyData
+.filter(e=>
+  e.kategorie===cat &&
+  e.datum.split(".")[2]===jahr &&
+  e.datum.split(".")[1]===monat
+)
+.reduce((s,e)=>s+e.gesamt,0)
+.toFixed(1)} kg
+
+</div>
 ${getWochen(cat,jahr,monat).map(woche=>`
 
 <div
