@@ -2446,12 +2446,66 @@ buildHistory();
 buildCalc();
 ">
     </div>
+<br><br>
 
+<button
+class="save-btn"
+onclick="exportBackup()">
+
+Backup erstellen
+
+</button>
+
+<input
+type="file"
+id="backupFile"
+style="display:none"
+onchange="importBackup(event)">
+
+<button
+class="save-btn"
+onclick="
+document
+.getElementById('backupFile')
+.click();
+">
+
+Backup laden
+
+</button>
   </div>`;
   updateHistoryTabColor();
 
 }
+function exportBackup(){
 
+  let backup = {
+
+    historyData,
+    lagerData,
+    lieferungen,
+    globalCfg,
+    hiddenWarnings
+
+  };
+
+  let blob = new Blob(
+    [JSON.stringify(backup,null,2)],
+    {type:"application/json"}
+  );
+
+  let a =
+  document.createElement("a");
+
+  a.href =
+  URL.createObjectURL(blob);
+
+  a.download =
+  "futterrechner-backup.json";
+
+  a.click();
+
+}
 function updateHistoryTabColor(){
 
   let tab =
