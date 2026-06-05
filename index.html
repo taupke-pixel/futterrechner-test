@@ -1624,6 +1624,32 @@ ${jahr}
 
 </div>
 
+${historyCollapsed.jahre[cat+"_"+jahr] ? `
+
+<div
+style="
+padding-left:20px;
+">
+
+${getMonate(cat,jahr).map(monat=>`
+
+<div
+style="
+padding:10px;
+margin-bottom:6px;
+background:#f8fafc;
+border-radius:8px;
+">
+
+▶ ${monat}.${jahr}
+
+</div>
+
+`).join("")}
+
+</div>
+
+` : ""}
 `).join("")}
 
 </div>
