@@ -2536,11 +2536,17 @@ function exportBackup(){
     hiddenWarnings =
     backup.hiddenWarnings || {};
 
-    saveHistoryStorage();
-    saveLagerStorage();
+ saveHistoryStorage();
+saveLagerStorage();
 
-    buildCalc();
-    buildHistory();
+saveGlobal();
+saveLieferungen();
+saveHiddenWarnings();
+
+save();
+
+buildCalc();
+buildHistory();
 
     alert("Backup geladen");
 
