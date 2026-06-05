@@ -1699,7 +1699,29 @@ ${historyCollapsed.jahre[cat+"_"+jahr] ? `
 style="
 margin-left:20px;
 ">
+<div
+style="
+padding:10px;
+margin-bottom:10px;
+background:#dfeaf3;
+border-radius:8px;
+font-weight:bold;
+">
 
+Jahressumme
+
+<br><br>
+
+Gesamt:
+${historyData
+.filter(e=>
+  e.kategorie===cat &&
+  e.datum.split(".")[2]===jahr
+)
+.reduce((s,e)=>s+e.gesamt,0)
+.toFixed(1)} kg
+
+</div>
 ${getMonate(cat,jahr).map(monat=>`
 
 <div
