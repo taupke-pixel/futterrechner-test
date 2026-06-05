@@ -1753,7 +1753,54 @@ ${historyData
 )
 .reduce((s,e)=>s+e.gesamt,0)
 .toFixed(1)} kg
+<br><br>
 
+${(() => {
+
+let futter = {};
+
+historyData
+
+.filter(e=>
+  e.kategorie===cat &&
+  e.datum.split(".")[2]===jahr &&
+  e.datum.split(".")[1]===monat
+)
+
+.forEach(e=>{
+
+  e.futter.forEach(f=>{
+
+    futter[f.name] =
+    (futter[f.name] || 0)
+    + f.kg;
+
+  });
+
+});
+
+return Object.entries(futter)
+
+.map(([name,kg])=>`
+
+<div
+style="
+display:flex;
+justify-content:space-between;
+padding:4px 0;
+">
+
+<span>${name}</span>
+
+<span>${kg.toFixed(1)} kg</span>
+
+</div>
+
+`)
+
+.join("");
+
+})()}
 </div>
 ${getWochen(cat,jahr,monat).map(woche=>`
 
