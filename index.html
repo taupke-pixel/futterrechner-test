@@ -334,8 +334,8 @@ let historyCollapsed = {
 
 kategorien:{},
 jahre:{},
-monate:{}
-
+monate:{},
+wochen:{}
 };
 
 function save(){localStorage.setItem("futter",JSON.stringify(data))}
@@ -1529,6 +1529,52 @@ function getKategorieName(cat){
   return monate.sort((a,b)=>b-a);
 
 }
+  function getWochen(cat,jahr,monat){
+
+  let logs = historyData.filter(e=>
+
+    e.kategorie===cat &&
+    e.datum.split(".")[2]===jahr &&
+    e.datum.split(".")[1]===monat
+
+  );
+
+  let wochen = [
+
+    ...new Set(
+
+      logs.map(e=>{
+
+        let tag =
+        parseInt(
+          e.datum.split(".")[0]
+        );
+
+        let start =
+        Math.floor((tag-1)/7)*7+1;
+
+        let ende =
+        start+6;
+
+        return (
+          String(start).padStart(2,"0")
+          + "."
+          + monat
+          + " - "
+          + String(ende).padStart(2,"0")
+          + "."
+          + monat
+        );
+
+      })
+
+    )
+
+  ];
+
+  return wochen;
+
+}
   
 function buildHistory(){
 
@@ -1648,13 +1694,51 @@ ${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? `
 <div
 style="
 margin-left:20px;
+">
+
+${getWochen(cat,jahr,monat).map(woche=>`
+
+<div
+
+onclick="
+historyCollapsed.wochen['${cat}_${jahr}_${monat}_${woche}']=
+!historyCollapsed.wochen['${cat}_${jahr}_${monat}_${woche}'];
+
+buildHistory();
+"
+
+style="
+padding:8px;
+margin-bottom:6px;
+background:#f8fafc;
+border-radius:8px;
+cursor:pointer;
+font-weight:bold;
+">
+
+${historyCollapsed.wochen[cat+"_"+jahr+"_"+monat+"_"+woche] ? "▼" : "▶"}
+${woche}
+
+</div>
+
+${historyCollapsed.wochen[cat+"_"+jahr+"_"+monat+"_"+woche] ? `
+
+<div
+style="
+margin-left:20px;
 padding:8px;
 background:#fff;
 border-radius:8px;
 margin-bottom:6px;
 ">
 
-Monat geöffnet
+Woche geöffnet
+
+</div>
+
+` : ""}
+
+`).join("")}
 
 </div>
 
