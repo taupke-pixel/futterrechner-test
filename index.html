@@ -330,12 +330,7 @@ let historyCollapsed = {
   tageslog:false,
   lager:false,
   lieferungen:false,
-  verlauf:false,
-
-  kategorien:{},
-  jahre:{},
-  monate:{},
-  wochen:{}
+  verlauf:false
 
 };
 
@@ -500,6 +495,7 @@ function saveHistory(cat){
 
   buildHistory();
 
+  alert("Gespeichert");
 }
   function calcAverage(produkt){
 
@@ -1462,143 +1458,443 @@ function deleteHistory(id){
 
   alert("Tageslog gelöscht");
 }
-  
-function getKategorieName(cat){
 
-  return globalCfg[
-    cat + "Name"
-  ] || cat;
-}
-
-function getLogsByKategorie(cat){
-
-  return historyData.filter(e=>
-
-    e.kategorie === cat
-
-  );
-}
-
-function hatLogs(cat){
-
-  return getLogsByKategorie(cat)
-  .length > 0;
-}
-  function getJahre(cat){
-
-  let jahre = [
-
-    ...new Set(
-
-      getLogsByKategorie(cat)
-      .map(e => e.datum.split(".")[2])
-
-    )
-
-  ];
-
-  return jahre.sort((a,b)=>b-a);
-}
-  function getMonate(cat,jahr){
-
-  let monate = [
-
-    ...new Set(
-
-      getLogsByKategorie(cat)
-
-      .filter(e=>
-        e.datum.split(".")[2]===jahr
-      )
-
-      .map(e=>
-        e.datum.split(".")[1]
-      )
-
-    )
-
-  ];
-
-  return monate.sort((a,b)=>b-a);
-}
-function getMonatsLogs(cat,jahr,monat){
-
-  return getLogsByKategorie(cat)
-
-  .filter(e=>
-
-    e.datum.split(".")[2]===jahr &&
-    e.datum.split(".")[1]===monat
-
-  );
-}  
-  function getWochen(cat,jahr,monat){
-
-  let logs = getMonatsLogs(
-    cat,
-    jahr,
-    monat
-  );
-
-  let wochen = {};
-
-  logs.forEach(e=>{
-
-    let teile =
-    e.datum.split(".");
-
-    let tag =
-    parseInt(teile[0]);
-
-    let start =
-    Math.floor((tag-1)/7)*7+1;
-
-    let ende =
-    start+6;
-
-    let key =
-    String(start).padStart(2,"0")
-    + "."
-    + monat
-    + " - "
-    + String(ende).padStart(2,"0")
-    + "."
-    + monat;
-
-    wochen[key]=true;
-
-  });
-
-  return Object.keys(wochen);
-}
-
-function getKategorien(){
-
-  return [
-    "kuehe",
-    "bullen",
-    "faersen",
-    "kaelber",
-    "trocken",
-    "restbullen"
-  ];
-}
-  
 function buildHistory(){
 
   let h = document.getElementById("history");
 
+  let agfRest = calcResttage("agf");
+
+  let mlfRest = calcResttage("mlf");
+
   h.innerHTML = `
-  <div class="history-box">
-    <div class="history-header">
-      Test
+
+<div class="history-box ${historyCollapsed.tageslog?'collapsed':''}">
+
+  <div class="history-header"
+
+  onclick="historyCollapsed.tageslog=
+  !historyCollapsed.tageslog;
+
+  buildHistory();">
+
+  Tageslog
+
+  </div>
+
+  <div class="cat-body">
+
+  ${Object.entries(
+
+    historyData.reduce((acc,e)=>{
+
+      if(!acc[e.datum])
+        acc[e.datum]=[];
+
+      acc[e.datum].push(e);
+
+      return acc;
+
+    },{})
+
+  ).map(([datum,eintraege],index)=>`
+
+    <div
+    style="
+    margin-bottom:20px;
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid #d5dbe0;
+    ">
+
+      <div
+
+      onclick="
+      let el=this.nextElementSibling;
+
+      el.style.display=
+      el.style.display==='none'
+      ?'block'
+      :'none';
+      "
+
+      style="
+      background:#2f3b45;
+      color:white;
+      padding:14px;
+      font-size:22px;
+      font-weight:bold;
+      cursor:pointer;
+      ">
+
+      ${index===0?'▼':'▶'}
+      ${datum}
+
+      </div>
+
+      <div
+      style="
+      display:${index===0?'block':'none'};
+      background:#fff;
+      padding:14px;
+      ">
+
+      ${eintraege.map(e=>`
+
+        <div class="history-item"
+
+        style="
+        padding:16px;
+        margin-bottom:14px;
+        border-radius:10px;
+        background:#f8fafc;
+        ">
+
+        <div
+        style="
+        font-size:24px;
+        font-weight:bold;
+        margin-bottom:12px;
+        ">
+
+        ${globalCfg[e.kategorie+"Name"] || e.kategorie}
+
+        </div>
+
+        <div style="margin-bottom:10px;">
+
+        ${e.futter && e.futter.length ?
+
+        e.futter.map(f=>`
+
+        <div style="
+        display:flex;
+        justify-content:space-between;
+        padding:5px 0;
+        border-bottom:1px solid #ddd;
+        ">
+
+        <span>${f.name}</span>
+
+        <span>${f.kg.toFixed(1)} kg</span>
+
+        </div>
+
+        `).join("")
+
+        :
+
+        "Keine Einzelwerte gespeichert"
+
+        }
+
+         </div>
+
+        <div style="
+        margin-top:12px;
+        font-weight:bold;
+        ">
+
+        Tiere:
+        ${e.tiere}
+
+        <br>
+
+        Gesamt:
+        ${e.gesamt.toFixed(1)} kg
+
+        <br><br>
+
+<button
+
+class="save-btn"
+
+onclick="deleteHistory('${e.id}')">
+
+Löschen
+
+</button>
+
+        </div>
+
+        </div>
+
+      `).join("")}
+
+      </div>
+
+    </div>
+
+  `).join("")}
+
+  </div>
+
+</div>
+
+
+  <div class="history-box ${historyCollapsed.lager?'collapsed':''}">
+
+    <div class="history-header"
+
+    onclick="historyCollapsed.lager=!historyCollapsed.lager;buildHistory();">
+
+    Lagerbestand
+
     </div>
 
     <div class="cat-body">
-      buildHistory funktioniert
+
+      <div class="lager-card">
+
+      <b>${globalCfg.agfName}</b><br>
+
+      Bestand:
+      ${lagerData.agf.bestand.toFixed(1)} kg<br>
+
+      Ø Verbrauch:
+      ${calcAverage("agf").toFixed(1)} kg/Tag<br>
+
+      <span class="${getWarnClass("agf")}">
+
+   ${agfRest<=0
+
+?"Bestand leer"
+
+:`Reicht noch ca.
+${agfRest.toFixed(1)} Tage`
+
+}
+
+<br><br>
+
+Bestellen bis:
+
+<br>
+
+${formatDatum(
+  getBestellDatum("agf")
+)}
+
+      </span>
+
+      </div>
+
+
+      <div class="lager-card">
+
+      <b>${globalCfg.mlfName}</b><br>
+
+      Bestand:
+      ${lagerData.mlf.bestand.toFixed(1)} kg<br>
+
+      Ø Verbrauch:
+      ${calcAverage("mlf").toFixed(1)} kg/Tag<br>
+
+      <span class="${getWarnClass("mlf")}">
+
+  ${mlfRest<=0
+
+?"Bestand leer"
+
+:`Reicht noch ca.
+${mlfRest.toFixed(1)} Tage`
+
+}
+
+<br><br>
+
+Bestellen bis:
+
+<br>
+
+${formatDatum(
+  getBestellDatum("mlf")
+)}
+
+      </span>
+
+      </div>
+
     </div>
+
   </div>
-  `;
+
+
+  <div class="history-box ${historyCollapsed.lieferungen?'collapsed':''}">
+
+    <div class="history-header"
+
+    onclick="historyCollapsed.lieferungen=!historyCollapsed.lieferungen;buildHistory();">
+
+    Lieferungen
+
+    </div>
+
+    <div class="cat-body">
+
+      <div class="delivery-form">
+
+      <select id="liefer-produkt">
+
+<option value="agf">
+${globalCfg.agfName}
+</option>
+
+<option value="mlf">
+${globalCfg.mlfName}
+</option>
+
+      </select>
+
+      <input type="date" id="liefer-datum">
+
+      <input
+      type="number"
+      id="liefer-menge"
+      placeholder="Menge in kg">
+
+      <button
+      class="save-btn"
+      onclick="addLieferung()">
+
+      Lieferung speichern
+
+      </button>
+
+      </div>
+
+    </div>
+<br>
+
+${lieferungen.map(l=>`
+
+<div class="history-item"
+
+style="
+padding:14px;
+margin-bottom:10px;
+background:#f8fafc;
+border-radius:10px;
+">
+
+<div style="
+font-size:20px;
+font-weight:bold;
+margin-bottom:8px;
+">
+
+${l.produkt==="agf"
+?globalCfg.agfName
+:globalCfg.mlfName}
+
+</div>
+
+Datum:
+${l.datum}
+
+<br>
+
+Menge:
+${l.menge.toFixed(1)} kg
+<br><br>
+
+<button
+
+class="save-btn"
+
+onclick="deleteLieferung('${l.id}')">
+
+Löschen
+
+</button>
+
+</div>
+
+`).join("")}
+
+</div>
+
+<div class="history-box ${historyCollapsed.verlauf?'collapsed':''}">
+
+    <div class="history-header"
+
+    onclick="historyCollapsed.verlauf=!historyCollapsed.verlauf;buildHistory();">
+
+    Warnstufen
+
+    </div>
+
+    <div class="cat-body">
+
+    ${globalCfg.agfName} Orange
+
+    <input
+    type="number"
+    value="${lagerData.agf.orange}"
+
+    oninput="
+lagerData.agf.orange=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+
+${globalCfg.agfName} Rot
+
+<input
+type="number"
+value="${lagerData.agf.rot}"
+
+oninput="
+lagerData.agf.rot=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+
+    <br><br>
+
+   ${globalCfg.mlfName} Orange
+
+    <input
+    type="number"
+    value="${lagerData.mlf.orange}"
+
+    oninput="
+lagerData.mlf.orange=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+
+${globalCfg.mlfName} Rot
+
+<input
+type="number"
+value="${lagerData.mlf.rot}"
+
+oninput="
+lagerData.mlf.rot=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+    </div>
+
+  </div>`;
+  updateHistoryTabColor();
 
 }
 
