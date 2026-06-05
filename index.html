@@ -1574,14 +1574,25 @@ ${historyCollapsed.kategorien[cat] ? `
 
 <div
 style="
-padding:10px 20px;
-margin-bottom:10px;
-background:#f8fafc;
-border-radius:8px;
+padding-left:20px;
 ">
 
-Anzahl Logs:
-${getLogsByKategorie(cat).length}
+${getJahre(cat).map(jahr=>`
+
+<div
+style="
+padding:10px;
+margin-bottom:8px;
+background:#eef3f7;
+border-radius:8px;
+font-weight:bold;
+">
+
+▶ ${jahr}
+
+</div>
+
+`).join("")}
 
 </div>
 
