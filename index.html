@@ -1581,15 +1581,24 @@ padding-left:20px;
 ${getJahre(cat).map(jahr=>`
 
 <div
+
+onclick="
+historyCollapsed.jahre['${cat}_${jahr}']=
+!historyCollapsed.jahre['${cat}_${jahr}'];
+buildHistory();
+"
+
 style="
 padding:10px;
 margin-bottom:8px;
 background:#eef3f7;
 border-radius:8px;
 font-weight:bold;
+cursor:pointer;
 ">
 
-▶ ${jahr}
+${historyCollapsed.jahre[cat+"_"+jahr] ? "▼" : "▶"}
+${jahr}
 
 </div>
 
