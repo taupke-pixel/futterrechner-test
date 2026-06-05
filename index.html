@@ -1575,6 +1575,42 @@ function getKategorieName(cat){
   return wochen;
 
 }
+  function getTage(cat,jahr,monat,woche){
+
+  let teile =
+  woche.split(" - ");
+
+  let start =
+  parseInt(
+    teile[0].split(".")[0]
+  );
+
+  let ende =
+  parseInt(
+    teile[1].split(".")[0]
+  );
+
+  return historyData.filter(e=>{
+
+    if(e.kategorie!==cat)
+      return false;
+
+    let d =
+    e.datum.split(".");
+
+    let tag =
+    parseInt(d[0]);
+
+    return (
+      d[2]===jahr &&
+      d[1]===monat &&
+      tag>=start &&
+      tag<=ende
+    );
+
+  });
+
+}
   
 function buildHistory(){
 
@@ -1726,13 +1762,23 @@ ${historyCollapsed.wochen[cat+"_"+jahr+"_"+monat+"_"+woche] ? `
 <div
 style="
 margin-left:20px;
-padding:8px;
-background:#fff;
-border-radius:8px;
-margin-bottom:6px;
 ">
 
-Woche geöffnet
+${getTage(cat,jahr,monat,woche).map(e=>`
+
+<div
+style="
+padding:8px;
+margin-bottom:6px;
+background:#fff;
+border-radius:8px;
+">
+
+${e.datum}
+
+</div>
+
+`).join("")}
 
 </div>
 
