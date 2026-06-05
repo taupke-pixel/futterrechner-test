@@ -1764,6 +1764,25 @@ style="
 margin-left:20px;
 ">
 
+<div
+style="
+padding:10px;
+margin-bottom:10px;
+background:#eef3f7;
+border-radius:8px;
+font-weight:bold;
+">
+
+Wochensumme
+
+<br><br>
+
+Gesamt:
+${getTage(cat,jahr,monat,woche)
+.reduce((s,e)=>s+e.gesamt,0)
+.toFixed(1)} kg
+
+</div>
 ${getTage(cat,jahr,monat,woche).map(e=>`
 
 <div
