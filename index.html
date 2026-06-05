@@ -1635,7 +1635,10 @@ function buildHistory(){
 
   </div>
 
-  <div class="cat-body">
+ <div class="cat-body"
+style="
+display:${historyCollapsed.tageslog ? 'none' : 'block'};
+">
 ${getKategorien().map(cat=>`
 
 <div
