@@ -1460,7 +1460,26 @@ function deleteHistory(id){
 
   alert("Tageslog gelöscht");
 }
+function getKategorien(){
 
+  return [
+    "kuehe",
+    "bullen",
+    "faersen",
+    "kaelber",
+    "trocken",
+    "restbullen"
+  ];
+
+}
+
+function getKategorieName(cat){
+
+  return globalCfg[
+    cat + "Name"
+  ] || cat;
+
+}
 function buildHistory(){
 
   let h = document.getElementById("history");
