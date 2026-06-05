@@ -2479,15 +2479,19 @@ Backup laden
 }
 function exportBackup(){
 
-  let backup = {
+ let backup = {
 
-    historyData,
-    lagerData,
-    lieferungen,
-    globalCfg,
-    hiddenWarnings
+  data,
+  globalCfg,
 
-  };
+  historyData,
+  lagerData,
+  lieferungen,
+
+  hiddenWarnings,
+  historyCollapsed
+
+};
 
   let blob = new Blob(
     [JSON.stringify(backup,null,2)],
@@ -2521,34 +2525,41 @@ function exportBackup(){
     let backup =
     JSON.parse(e.target.result);
 
-    historyData =
-    backup.historyData || [];
+   data =
+backup.data || data;
 
-    lagerData =
-    backup.lagerData || lagerData;
+globalCfg =
+backup.globalCfg || globalCfg;
 
-    lieferungen =
-    backup.lieferungen || [];
+historyData =
+backup.historyData || [];
 
-    globalCfg =
-    backup.globalCfg || globalCfg;
+lagerData =
+backup.lagerData || lagerData;
 
-    hiddenWarnings =
-    backup.hiddenWarnings || {};
+lieferungen =
+backup.lieferungen || [];
 
- saveHistoryStorage();
+hiddenWarnings =
+backup.hiddenWarnings || {};
+
+historyCollapsed =
+backup.historyCollapsed || historyCollapsed;
+
+save();
+saveGlobal();
+
+saveHistoryStorage();
 saveLagerStorage();
 
-saveGlobal();
 saveLieferungen();
 saveHiddenWarnings();
 
-save();
-
+buildSettings();
 buildCalc();
 buildHistory();
 
-    alert("Backup geladen");
+alert("Backup geladen");
 
   };
 
