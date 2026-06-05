@@ -330,7 +330,9 @@ let historyCollapsed = {
   tageslog:false,
   lager:false,
   lieferungen:false,
-  verlauf:false
+  verlauf:false,
+
+  kategorien:{}
 
 };
 
@@ -1483,6 +1485,33 @@ function buildHistory(){
   </div>
 
   <div class="cat-body">
+
+ ${getKategorien().map(cat=>`
+
+<div
+
+onclick="
+historyCollapsed.kategorien['${cat}']=
+!historyCollapsed.kategorien['${cat}'];
+
+buildHistory();
+"
+
+style="
+padding:10px;
+margin-bottom:8px;
+background:#eef3f7;
+border-radius:8px;
+font-weight:bold;
+cursor:pointer;
+">
+
+${historyCollapsed.kategorien[cat] ? "▼" : "▶"}
+${getKategorieName(cat)}
+
+</div>
+
+`).join("")}
 
   ${Object.entries(
 
