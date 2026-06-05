@@ -1555,6 +1555,23 @@ ${getKategorieName(cat)}
 
 </div>
 
+${historyCollapsed.kategorien[cat] ? `
+
+<div
+style="
+padding:10px 20px;
+margin-bottom:10px;
+background:#f8fafc;
+border-radius:8px;
+">
+
+Anzahl Logs:
+${getLogsByKategorie(cat).length}
+
+</div>
+
+` : ""}
+
 `).join("")}
 
 </div>
