@@ -1535,14 +1535,22 @@ border-radius:10px;
 ${getKategorien().map(cat=>`
 
 <div
+onclick="
+historyCollapsed.kategorien[${JSON.stringify(cat)}]=
+!historyCollapsed.kategorien[${JSON.stringify(cat)}];
+buildHistory();
+"
+
 style="
 padding:10px;
 margin-bottom:8px;
 background:#fff;
 border-radius:8px;
 font-weight:bold;
+cursor:pointer;
 ">
 
+${historyCollapsed.kategorien[cat] ? "▼" : "▶"}
 ${getKategorieName(cat)}
 
 </div>
