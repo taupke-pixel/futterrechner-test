@@ -1490,12 +1490,22 @@ function buildHistory(){
 
 <div
 
-onclick="
-historyCollapsed.kategorien['${cat}']=
-!historyCollapsed.kategorien['${cat}'];
+${getKategorien().map(cat=>`
 
-buildHistory();
-"
+<div
+style="
+padding:10px;
+margin-bottom:8px;
+background:#eef3f7;
+border-radius:8px;
+font-weight:bold;
+">
+
+${getKategorieName(cat)}
+
+</div>
+
+`).join("")}
 
 style="
 padding:10px;
