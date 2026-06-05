@@ -1536,8 +1536,8 @@ ${getKategorien().map(cat=>`
 
 <div
 onclick="
-historyCollapsed.kategorien[${JSON.stringify(cat)}]=
-!historyCollapsed.kategorien[${JSON.stringify(cat)}];
+historyCollapsed.kategorien['${cat}']=
+!historyCollapsed.kategorien['${cat}'];
 buildHistory();
 "
 
