@@ -1497,6 +1497,28 @@ function hatLogs(cat){
 
   return jahre.sort((a,b)=>b-a);
 }
+  function getMonate(cat,jahr){
+
+  let monate = [
+
+    ...new Set(
+
+      getLogsByKategorie(cat)
+
+      .filter(e=>
+        e.datum.split(".")[2]===jahr
+      )
+
+      .map(e=>
+        e.datum.split(".")[1]
+      )
+
+    )
+
+  ];
+
+  return monate.sort((a,b)=>b-a);
+}
 
 function getKategorien(){
 
