@@ -1635,14 +1635,23 @@ padding-left:20px;
 ${getMonate(cat,jahr).map(monat=>`
 
 <div
+
+onclick="
+historyCollapsed.monate['${cat}_${jahr}_${monat}']=
+!historyCollapsed.monate['${cat}_${jahr}_${monat}'];
+buildHistory();
+"
+
 style="
 padding:10px;
 margin-bottom:6px;
 background:#f8fafc;
 border-radius:8px;
+cursor:pointer;
 ">
 
-▶ ${monat}.${jahr}
+${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? "▼" : "▶"}
+${monat}.${jahr}
 
 </div>
 
