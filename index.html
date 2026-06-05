@@ -1737,32 +1737,7 @@ ${getMonatsLogs(cat,jahr,monat)
 </div>
 
 ` : ""}
-${historyCollapsed.monate[cat+"_"+jahr+"_"+monat] ? `
 
-<div
-style="
-margin-left:20px;
-">
-
-${getWochen(cat,jahr,monat).map(woche=>`
-
-<div
-style="
-padding:10px;
-margin-bottom:6px;
-background:#f8fafc;
-border-radius:8px;
-">
-
-▶ ${woche}
-
-</div>
-
-`).join("")}
-
-</div>
-
-` : ""}
 
 `).join("")}
 
