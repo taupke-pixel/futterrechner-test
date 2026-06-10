@@ -936,7 +936,10 @@ if(warn !== "warn-red")
     if(hiddenWarnings[produkt] === getToday())
       return;
 
-    let text = produkt.toUpperCase();
+  let text =
+produkt === "agf"
+? globalCfg.agfName
+: globalCfg.mlfName;
 
     html += `
 
