@@ -792,14 +792,9 @@ let bullItem = bull.find(b=>{
   if(it.type && b.type) return it.type===b.type;
   return b.name===it.name;
 });
-let bullGesamt = 0;
 
-bull.forEach(b=>{
-  if(b.kg>0) bullGesamt += b.kg;
-});
-  
 let soll = bullItem
-  ? (bullItem.kg / bullGesamt) * ziel
+  ? bullItem.kg * (data.restbullen.anz || ziel / (bullItem.kg||1))
   : 0;
 
 let anteil = it.kg / total;
@@ -816,7 +811,7 @@ if(it.type==="mlf")
 zeit=`<span class="mlf">${fmt(Math.abs(diff)/globalCfg.mlfKg)}</span>`;
 
 
-lauf += diff;
+  lauf += diff;
 let summe = lauf;
   
 
@@ -859,7 +854,7 @@ rows += `
       Zielgewicht Bullenration (kg)
       <input type="number"
       value="${ziel}"
-    oninput="
+oninput="
 data.restbullen.ziel=num(this.value);
 
 let proBulle = 0;
@@ -954,11 +949,10 @@ if(warn !== "warn-red")
     if(hiddenWarnings[produkt] === getToday())
       return;
 
-  let text =
+   let text =
 produkt === "agf"
 ? globalCfg.agfName
 : globalCfg.mlfName;
-
     html += `
 
     <div class="warning-banner">
@@ -1437,7 +1431,7 @@ function deleteLieferung(id){
   buildHistory();
 
   buildCalc();
-  
+
 }
 
 function deleteHistory(id){
