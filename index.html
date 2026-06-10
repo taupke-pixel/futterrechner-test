@@ -746,26 +746,12 @@ function addArbeitstage(starttage,arbeitstage){
 
   heute.setHours(0,0,0,0);
 
-  if(bestell){
-
-    let b =
-    new Date(bestell);
-
-    b.setHours(0,0,0,0);
-
-    let diff =
-    Math.ceil(
-      (b - heute)
-      / (1000*60*60*24)
-    );
-
-    if(
-      diff <=
-      lagerData[produkt].rot
-    ){
-      return "warn-red";
-    }
-  }
+ if(
+  tage <=
+  lagerData[produkt].rot
+){
+  return "warn-red";
+}
 
   if(
     tage <=
