@@ -924,11 +924,31 @@ ${alreadySavedToday('bullen')
   </div>`; 
 }
  
-  function saveRestBullenHistory(){
+function saveRestBullenHistory(){
 
-  alert("Restbullen Test");
+  let eintrag = {
+
+    id: Date.now()+Math.random().toString(36).substr(2,5),
+
+    datum: getToday(),
+
+    kategorie: "restbullen",
+
+    tiere: data.restbullen.anz,
+
+    gesamt: 0,
+
+    agf: 0,
+
+    mlf: 0,
+
+    futter:[]
+  };
+
+  console.log(eintrag);
 
 }
+
 function hideWarning(produkt){
 
   hiddenWarnings[produkt] = getToday();
