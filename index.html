@@ -910,7 +910,7 @@ ${alreadySavedToday('bullen')?'saved':''}"
 
 ${alreadySavedToday('bullen')?'disabled':''}
 
-onclick="saveHistory('bullen')">
+onclick="saveRestBullenHistory()">
 
 ${alreadySavedToday('bullen')
 ?'Gespeichert'
@@ -922,6 +922,12 @@ ${alreadySavedToday('bullen')
 
     </div>
   </div>`; 
+}
+ 
+  function saveRestBullenHistory(){
+
+  alert("Restbullen Test");
+
 }
 function hideWarning(produkt){
 
