@@ -1,0 +1,27 @@
+{
+  "name": "futterrechner-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tests für den Futterrechner (Vergleichstest, Security-Rules-Tests)",
+  "scripts": {
+    "vergleich": "powershell -NoProfile -File emulator.ps1 \"node tests/vergleich.js\"",
+    "vergleich:basis": "node vergleich.js --basis",
+    "regeln": "powershell -NoProfile -File emulator.ps1 \"node --test --test-reporter=spec tests/regeln.test.js\"",
+    "sync": "powershell -NoProfile -File emulator.ps1 \"node tests/sync.js\"",
+    "freigabe": "powershell -NoProfile -File emulator.ps1 \"node tests/freigabe.js\"",
+    "geraete": "powershell -NoProfile -File emulator.ps1 \"node tests/geraete.js\"",
+    "handy": "powershell -NoProfile -File emulator.ps1 \"node tests/handy.js\"",
+    "uebernahme": "powershell -NoProfile -File emulator.ps1 \"node tests/uebernahme.js\"",
+    "funktionen": "powershell -NoProfile -File emulator.ps1 \"node tests/funktionen.js\"",
+    "wasser": "powershell -NoProfile -File emulator.ps1 \"node tests/wasser.js\"",
+    "restmischung": "powershell -NoProfile -File emulator.ps1 \"node tests/restmischung.js\"",
+    "fehler": "powershell -NoProfile -File emulator.ps1 \"node tests/fehler.js\"",
+    "test": "npm run regeln && npm run vergleich && npm run sync && npm run freigabe && npm run geraete && npm run fehler && npm run handy && npm run uebernahme && npm run funktionen"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "playwright": "^1.63.0"
+  }
+}

@@ -1,0 +1,289 @@
+rules_version = '2';
+
+// Security Rules Futterrechner „Stall Ultra“
+// Grundsatz: Daten eines Betriebs darf nur ein Gerät lesen/schreiben, das in betriebe/{betriebId}/geraete/{uid} steht.
+// Geräte-Identität = anonyme Firebase-Anmeldung (request.auth.uid). Alles, was hier nicht erlaubt ist, ist verboten.
+// Betreiber (Fritz): alle Geräte des Betriebs, der in system/betreiber eingetragen ist (fester Eintrag, kein Rollensystem).
+// Der Betreiber darf Anfragen freigeben/ablehnen und dabei Betriebe + erstes Gerät anlegen – aber keine Futterdaten lesen.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function angemeldet() {
+      return request.auth != null;
+    }
+
+    function istGeraet(betriebId) {
+      return angemeldet() && exists(/databases/$(database)/documents/betriebe/$(betriebId)/geraete/$(request.auth.uid));
+    }
+
+    // Betreiber-Gerät: ein Gerät des Betriebs, der in system/betreiber eingetragen ist (Fritz' Geräte)
+    function istBetreiberGeraet() {
+      return angemeldet()
+        && exists(/databases/$(database)/documents/system/betreiber)
+        && istGeraet(get(/databases/$(database)/documents/system/betreiber).data.betriebId);
+    }
+
+    // Betreiber per PIN: irgendein Gerät, auf dem in den letzten 30 Minuten die richtige Betreiber-PIN eingegeben wurde
+    // (betreiberFreischaltung/{uid}). Damit kann Fritz Freigabe-Links aus der E-Mail auf jedem Gerät bestätigen.
+    function istBetreiberPerPin() {
+      return angemeldet()
+        && exists(/databases/$(database)/documents/betreiberFreischaltung/$(request.auth.uid))
+        && request.time < get(/databases/$(database)/documents/betreiberFreischaltung/$(request.auth.uid)).data.zeit
+                          + duration.value(30, 'm');
+    }
+
+    function istBetreiber() {
+      return istBetreiberGeraet() || istBetreiberPerPin();
+    }
+
+    // Nur diese Felder ändern sich (alle anderen bleiben gleich)
+    function nurFelder(felder) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(felder);
+    }
+
+    function text(feld, max) {
+      return feld is string && feld.size() > 0 && feld.size() <= max;
+    }
+
+    // Einladung (PIN/QR) noch gültig: höchstens 10 Minuten alt (Serverzeit), passt zum Betrieb,
+    // und wird im selben Schritt gelöscht → nur einmal nutzbar
+    function einladungGueltig(code, betriebId) {
+      return exists(/databases/$(database)/documents/einladungen/$(code))
+        && get(/databases/$(database)/documents/einladungen/$(code)).data.betriebId == betriebId
+        && request.time < get(/databases/$(database)/documents/einladungen/$(code)).data.erstellt + duration.value(10, 'm')
+        && !existsAfter(/databases/$(database)/documents/einladungen/$(code));
+    }
+
+    // Verwaltungs-PIN: Das Gerät hat in den letzten 10 Minuten die richtige Verwaltungs-PIN des Betriebs eingegeben
+    // (betriebe/{id}/freischaltung/{uid}). Nur dann darf es Geräte hinzufügen (Einladung) oder andere Geräte entfernen.
+    function freigeschaltet(betriebId) {
+      return istGeraet(betriebId)
+        && exists(/databases/$(database)/documents/betriebe/$(betriebId)/freischaltung/$(request.auth.uid))
+        && request.time < get(/databases/$(database)/documents/betriebe/$(betriebId)/freischaltung/$(request.auth.uid)).data.zeit
+                          + duration.value(10, 'm');
+    }
+
+    // Prüfwert = SHA-256 (klein geschrieben, hex) des Nachweises, den die App aus der PIN berechnet
+    function pruefwertVon(nachweis) {
+      return hashing.sha256(nachweis).toHexString().lower();
+    }
+
+    // Anfrage nach diesem Schreibvorgang (im selben Paket)
+    function anfrageDanach(anfrageId) {
+      return getAfter(/databases/$(database)/documents/anfragen/$(anfrageId)).data;
+    }
+
+    // ---------- Betrieb ----------
+    match /betriebe/{betriebId} {
+      // Betreiber sieht nur Name/Datum der Betriebe (für „zu bestehendem Betrieb hinzufügen“), keine Futterdaten
+      allow read: if istGeraet(betriebId) || istBetreiber();
+      allow update: if (istGeraet(betriebId) && nurFelder(['name']) && text(request.resource.data.name, 100))
+                    // Merker „Verwaltungs-PIN ist festgelegt“ (nur zusammen mit dem Prüfwert) …
+                    || (istGeraet(betriebId) && nurFelder(['verwaltungsPinGesetzt'])
+                        && request.resource.data.verwaltungsPinGesetzt == true
+                        && existsAfter(/databases/$(database)/documents/betriebe/$(betriebId)/geheim/verwaltung))
+                    // … und beim Zurücksetzen durch den Betreiber wieder aus
+                    || (istBetreiber() && nurFelder(['verwaltungsPinGesetzt'])
+                        && request.resource.data.verwaltungsPinGesetzt == false
+                        && !existsAfter(/databases/$(database)/documents/betriebe/$(betriebId)/geheim/verwaltung));
+      // Neuer Betrieb nur bei Freigabe einer Anfrage durch den Betreiber
+      allow create: if istBetreiber()
+                    && request.resource.data.keys().hasOnly(['name', 'angelegt', 'anfrageId'])
+                    && text(request.resource.data.name, 100)
+                    && request.resource.data.angelegt == request.time
+                    && anfrageDanach(request.resource.data.anfrageId).status == 'erlaubt'
+                    && anfrageDanach(request.resource.data.anfrageId).betriebId == betriebId;
+
+      // Futterdaten: futter (Rationen), einstellungen, lager
+      match /daten/{dokId} {
+        allow read: if istGeraet(betriebId);
+        allow write: if istGeraet(betriebId) && dokId in ['futter', 'einstellungen', 'lager'];
+      }
+
+      // Tageslog: je Eintrag ein Dokument
+      match /history/{eintragId} {
+        allow read, write: if istGeraet(betriebId);
+      }
+
+      // Lieferungen: je Lieferung ein Dokument
+      match /lieferungen/{lieferId} {
+        allow read, write: if istGeraet(betriebId);
+      }
+
+      // Verwaltungs-PIN des Betriebs. Gespeichert wird nur ein Prüfwert. Lesen kann ihn niemand.
+      // Festlegen: einmal am Anfang von einem Gerät des Betriebs. Ändern: nur mit der alten PIN (freigeschaltet).
+      // Vergessen: der Betreiber (Fritz) kann sie zurücksetzen, danach legt der Betrieb eine neue fest.
+      match /geheim/{dokId} {
+        allow create: if dokId == 'verwaltung' && istGeraet(betriebId)
+                      && request.resource.data.keys().hasOnly(['pruefwert', 'gesetzt'])
+                      && request.resource.data.pruefwert is string && request.resource.data.pruefwert.size() == 64
+                      && request.resource.data.gesetzt == request.time;
+        allow update: if dokId == 'verwaltung' && freigeschaltet(betriebId)
+                      && request.resource.data.keys().hasOnly(['pruefwert', 'gesetzt'])
+                      && request.resource.data.pruefwert is string && request.resource.data.pruefwert.size() == 64
+                      && request.resource.data.gesetzt == request.time;
+        allow delete: if istBetreiber();
+      }
+
+      // PIN eingeben: gelingt nur, wenn der Nachweis zum gespeicherten Prüfwert passt. Lesen kann es niemand.
+      match /freischaltung/{geraetUid} {
+        allow create, update: if istGeraet(betriebId) && geraetUid == request.auth.uid
+                      && request.resource.data.keys().hasOnly(['nachweis', 'zeit'])
+                      && request.resource.data.zeit == request.time
+                      && request.resource.data.nachweis is string && request.resource.data.nachweis.size() == 64
+                      && exists(/databases/$(database)/documents/betriebe/$(betriebId)/geheim/verwaltung)
+                      && pruefwertVon(request.resource.data.nachweis)
+                         == get(/databases/$(database)/documents/betriebe/$(betriebId)/geheim/verwaltung).data.pruefwert;
+        allow delete: if istGeraet(betriebId) && geraetUid == request.auth.uid;
+      }
+
+      // Geräte des Betriebs
+      match /geraete/{geraetUid} {
+        allow read: if istGeraet(betriebId);
+        // Name eines Geräts ändern
+        allow update: if istGeraet(betriebId) && nurFelder(['name']) && text(request.resource.data.name, 60);
+        // Entfernen: jedes Gerät des Betriebs, aber nur mit Verwaltungs-PIN. Sich selbst abmelden geht ohne PIN.
+        allow delete: if (istGeraet(betriebId) && geraetUid == request.auth.uid) || freigeschaltet(betriebId);
+        // Gerät hinzufügen: (a) Betreiber bei Freigabe einer Anfrage dieses Geräts
+        allow create: if istBetreiber()
+                      && geraetUid != request.auth.uid
+                      && request.resource.data.keys().hasOnly(['name', 'seit', 'anfrageId'])
+                      && text(request.resource.data.name, 60)
+                      && request.resource.data.seit == request.time
+                      && anfrageDanach(request.resource.data.anfrageId).status == 'erlaubt'
+                      && anfrageDanach(request.resource.data.anfrageId).uid == geraetUid
+                      && anfrageDanach(request.resource.data.anfrageId).betriebId == betriebId
+                      && !exists(/databases/$(database)/documents/geraetezuordnung/$(geraetUid))
+                      && getAfter(/databases/$(database)/documents/geraetezuordnung/$(geraetUid)).data.betriebId == betriebId;
+        // Gerät hinzufügen: (b) das neue Gerät selbst mit gültiger Einladung (PIN oder QR-Code)
+        allow create: if angemeldet() && request.auth.uid == geraetUid
+                      && request.resource.data.keys().hasOnly(['name', 'seit', 'einladung'])
+                      && text(request.resource.data.name, 60)
+                      && request.resource.data.seit == request.time
+                      && request.resource.data.einladung is string
+                      && einladungGueltig(request.resource.data.einladung, betriebId)
+                      && !exists(/databases/$(database)/documents/geraetezuordnung/$(geraetUid))
+                      && getAfter(/databases/$(database)/documents/geraetezuordnung/$(geraetUid)).data.betriebId == betriebId;
+      }
+    }
+
+    // ---------- Zuordnung Gerät → Betrieb ----------
+    // Damit ein Gerät beim Start seinen Betrieb findet. Lesen nur das eigene.
+    match /geraetezuordnung/{geraetUid} {
+      allow get: if angemeldet() && request.auth.uid == geraetUid;
+      // Anlegen nur zusammen mit dem Geräte-Eintrag im Betrieb (dessen Regeln prüfen Freigabe bzw. Einladung)
+      allow create: if angemeldet()
+                    && request.resource.data.keys().hasOnly(['betriebId'])
+                    && request.resource.data.betriebId is string
+                    && existsAfter(/databases/$(database)/documents/betriebe/$(request.resource.data.betriebId)/geraete/$(geraetUid))
+                    && (istBetreiber() || request.auth.uid == geraetUid);
+      // Beim Entfernen eines Geräts wird auch seine Zuordnung gelöscht – vom Gerät selbst oder mit Verwaltungs-PIN
+      allow delete: if angemeldet() && (request.auth.uid == geraetUid || freigeschaltet(resource.data.betriebId));
+    }
+
+    // ---------- Zugangsanfragen ----------
+    match /anfragen/{anfrageId} {
+      // Anfrage stellen: nur für das eigene Gerät, Zeitpunkt = Serverzeit, bestätigte Fassungen von AGB/Datenschutz Pflicht
+      allow create: if angemeldet()
+                    && request.resource.data.keys().hasOnly(['vorname', 'nachname', 'betriebsname', 'email', 'uid',
+                         'alteGeraeteId', 'agbFassung', 'datenschutzFassung', 'zeitpunkt', 'status'])
+                    && request.resource.data.keys().hasAll(['vorname', 'nachname', 'betriebsname', 'email', 'uid',
+                         'agbFassung', 'datenschutzFassung', 'zeitpunkt', 'status'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'offen'
+                    && request.resource.data.zeitpunkt == request.time
+                    && text(request.resource.data.vorname, 100)
+                    && text(request.resource.data.nachname, 100)
+                    && text(request.resource.data.betriebsname, 100)
+                    && text(request.resource.data.email, 200)
+                    && text(request.resource.data.agbFassung, 100)
+                    && text(request.resource.data.datenschutzFassung, 100)
+                    && (!('alteGeraeteId' in request.resource.data) || request.resource.data.alteGeraeteId is string)
+                    && !exists(/databases/$(database)/documents/geraetezuordnung/$(request.auth.uid));
+      // Lesen: eigene Anfragen (Status sehen) und der Betreiber
+      allow read: if angemeldet() && (resource.data.uid == request.auth.uid || istBetreiber());
+      // Entscheiden: nur der Betreiber, nur offene Anfragen, nur Status/Betrieb/Zeitpunkt.
+      // Der Anfragende selbst kann seine Anfrage nie ändern oder löschen (Nachweis der Zustimmung bleibt).
+      allow update: if istBetreiber()
+                    && resource.data.status == 'offen'
+                    // nie die eigene Anfrage (auch nicht mit Betreiber-PIN)
+                    && resource.data.uid != request.auth.uid
+                    // jede Entscheidung wird im selben Schritt protokolliert
+                    && existsAfter(/databases/$(database)/documents/approvals/$(anfrageId))
+                    && nurFelder(['status', 'betriebId', 'entschieden'])
+                    && request.resource.data.entschieden == request.time
+                    && (
+                      (request.resource.data.status == 'abgelehnt' && !('betriebId' in request.resource.data))
+                      || (request.resource.data.status == 'erlaubt'
+                          && request.resource.data.betriebId is string
+                          && existsAfter(/databases/$(database)/documents/betriebe/$(request.resource.data.betriebId)/geraete/$(resource.data.uid)))
+                    );
+    }
+
+    // ---------- Einladungen für neue Geräte (PIN / QR-Code) ----------
+    match /einladungen/{code} {
+      // Wer den Code kennt, darf ihn nachschlagen (Betrieb, Ablauf). Auflisten nur für Geräte des Betriebs.
+      allow get: if angemeldet();
+      allow list: if istGeraet(resource.data.betriebId);
+      // Erzeugen: nur ein Gerät des Betriebs mit Verwaltungs-PIN, Zeit = Serverzeit. PIN = 8 Ziffern, QR = langer Zufallscode.
+      allow create: if freigeschaltet(request.resource.data.betriebId)
+                    && request.resource.data.keys().hasOnly(['betriebId', 'betriebName', 'von', 'erstellt', 'art'])
+                    && request.resource.data.von == request.auth.uid
+                    && request.resource.data.erstellt == request.time
+                    && request.resource.data.betriebName is string && request.resource.data.betriebName.size() <= 100
+                    && ((request.resource.data.art == 'pin' && code.matches('^[0-9]{8}$'))
+                        || (request.resource.data.art == 'qr' && code.matches('^[A-Za-z0-9]{32,64}$')));
+      // Löschen: Geräte des Betriebs (zurückziehen/aufräumen) oder beim Einlösen durch das neue Gerät
+      allow delete: if istGeraet(resource.data.betriebId)
+                    || (angemeldet()
+                        && request.time < resource.data.erstellt + duration.value(10, 'm')
+                        && existsAfter(/databases/$(database)/documents/betriebe/$(resource.data.betriebId)/geraete/$(request.auth.uid)));
+    }
+
+    // ---------- Betreiber-PIN (Freigabe auf jedem Gerät) ----------
+    // config/admin: nur Prüfwert der Betreiber-PIN. Lesen kann ihn niemand.
+    // Festlegen nur auf einem Betreiber-Gerät; ändern auch mit gültiger Betreiber-PIN.
+    match /config/{dokId} {
+      allow create: if dokId == 'admin' && istBetreiberGeraet()
+                    && request.resource.data.keys().hasOnly(['pruefwert', 'gesetzt'])
+                    && request.resource.data.pruefwert is string && request.resource.data.pruefwert.size() == 64
+                    && request.resource.data.gesetzt == request.time;
+      allow update: if dokId == 'admin' && istBetreiber()
+                    && request.resource.data.keys().hasOnly(['pruefwert', 'gesetzt'])
+                    && request.resource.data.pruefwert is string && request.resource.data.pruefwert.size() == 64
+                    && request.resource.data.gesetzt == request.time;
+    }
+
+    // Betreiber-PIN eingeben: gelingt nur mit passendem Nachweis. Lesen kann es niemand.
+    match /betreiberFreischaltung/{geraetUid} {
+      allow create, update: if angemeldet() && geraetUid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['nachweis', 'zeit'])
+                    && request.resource.data.zeit == request.time
+                    && request.resource.data.nachweis is string && request.resource.data.nachweis.size() == 64
+                    && exists(/databases/$(database)/documents/config/admin)
+                    && pruefwertVon(request.resource.data.nachweis)
+                       == get(/databases/$(database)/documents/config/admin).data.pruefwert;
+      allow delete: if angemeldet() && geraetUid == request.auth.uid;
+    }
+
+    // Protokoll der Entscheidungen (wer/wann), ohne PIN. Lesen kann es niemand, ändern auch nicht.
+    match /approvals/{anfrageId} {
+      allow create: if istBetreiber()
+                    && request.resource.data.keys().hasOnly(['aktion', 'zeit', 'geraet'])
+                    && request.resource.data.aktion in ['approve', 'deny']
+                    && request.resource.data.zeit == request.time
+                    && request.resource.data.geraet == request.auth.uid
+                    && getAfter(/databases/$(database)/documents/anfragen/$(anfrageId)).data.status
+                       == (request.resource.data.aktion == 'approve' ? 'erlaubt' : 'abgelehnt');
+    }
+
+    // ---------- Altes Zugangssystem (vor dem Umbau) ----------
+    // Nur noch lesbar für den Betreiber („hatte früher schon Zugang“). Niemand kann sich hier mehr selbst freischalten.
+    match /zugriffe/{alteId} {
+      allow get: if istBetreiber();
+    }
+
+    // system/betreiber wird nur von Hand (Firebase-Webseite) gepflegt – kein Zugriff aus der App.
+    // Alles andere: gesperrt
+  }
+}

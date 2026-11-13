@@ -5,10 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Futterrechner</title>
 
+<script>
+// 🧪 TESTVERSION (Paket Fressmengen): unter taupke-pixel.github.io/futterrechner-test/ – gleiche Internet-Adresse wie die
+// normale App, deshalb: eigener Gerätespeicher (alle Einträge mit Vorsilbe „fmtest:“, die normale App wird nie berührt).
+// SPIEGEL (Wahl Fritz 13.11.2026): liest die ECHTEN Daten des Betriebs, schreibt aber nie außerhalb von „test/“
+// (Sperre siehe „Testversion = Spiegel“ nach dem Firebase-Start). Lokal zum Testen: ?testversion=1 (Emulator/Testprojekt)
+var istTestversion = (location.hostname === "taupke-pixel.github.io" && location.pathname.toLowerCase().indexOf("/futterrechner-test") === 0)
+  || (["localhost","127.0.0.1"].indexOf(location.hostname) >= 0 && new URLSearchParams(location.search).get("testversion") === "1");
+if (istTestversion) {
+  (function(){
+    var P = "fmtest:", S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem, k = S.key;
+    // Firebase-eigene Einträge nicht umbenennen (die sind durch den eigenen Firebase-Namen „testversion“ schon getrennt)
+    var name = function(n){ n = String(n); return (n.indexOf("firestore_") === 0 || n.indexOf("firebase:") === 0) ? n : P + n; };
+    S.getItem = function(n){ return g.call(this, name(n)); };
+    S.setItem = function(n, v){ return s.call(this, name(n), v); };
+    S.removeItem = function(n){ return r.call(this, name(n)); };
+    S.clear = function(){ var weg = []; for (var i = 0; i < this.length; i++) { var n = k.call(this, i); if (n && n.indexOf(P) === 0) weg.push(n); } for (var j = 0; j < weg.length; j++) r.call(this, weg[j]); };
+  })();
+  document.addEventListener("DOMContentLoaded", function(){
+    var b = document.createElement("div");
+    b.id = "testversion-hinweis";
+    b.textContent = "🧪 TESTVERSION – zeigt deine echten Zahlen. Änderungen hier werden nicht gespeichert (eintragen in der normalen App).";
+    b.style.cssText = "background:#f2a900;color:#fff;text-align:center;font-weight:bold;padding:6px;font-size:15px";
+    document.body.insertBefore(b, document.body.firstChild);
+  });
+}
+</script>
+
 <!-- 🔥 HIER die Scripts -->
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<!-- QR-Code wird im Gerät selbst erzeugt (kein fremder Dienst sieht die Einladung) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
 <style>
 body{font-family:Arial;margin:0;background:#eef1f4}
@@ -27,7 +57,28 @@ header{background:#2f3b45;color:#fff;padding:14px;text-align:center;font-size:22
 .cat-bullen{background:#27ae60}
 .cat-trocken{background:#f2a900}
 .cat-kaelber{background:#9b59b6}
+.cat-timer{background:#2f3b45}
+.timer-anzeige{font-size:46px;font-weight:bold;text-align:center;font-variant-numeric:tabular-nums;margin:6px 0 12px}
+.timer-modus{display:flex;gap:8px;margin-bottom:10px}
+.timer-modus button,.timer-knoepfe button{flex:1;padding:14px 6px;font-size:18px;border:none;border-radius:10px;background:#d5dbe0;cursor:pointer}
+.timer-modus button.aktiv{background:#2f3b45;color:#fff}
+.timer-knoepfe{display:flex;gap:8px;margin-top:10px}
+.timer-knoepfe .start{background:#27ae60;color:#fff}
+.timer-knoepfe .pause{background:#f2a900;color:#fff}
+.timer-zeit{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:18px}
+.timer-zeit input{width:70px;font-size:20px;text-align:center}
+.timer-schnell{display:flex;gap:8px;margin-top:10px}
+.timer-schnell button{flex:1;padding:10px 4px;font-size:16px;border:none;border-radius:10px;background:#eef1f4;cursor:pointer}
+.timer-alarm{background:#b30000;color:#fff;border-radius:12px;padding:14px;text-align:center;font-size:22px;font-weight:bold;margin-bottom:10px;animation:timerBlinken 1s infinite}
+.timer-alarm button{margin-top:10px;padding:12px 24px;font-size:18px;border:none;border-radius:10px;background:#fff;color:#b30000;font-weight:bold}
+.app-update{background:#2f80ed;color:#fff;border-radius:14px;padding:14px;margin-bottom:18px;font-size:17px;line-height:1.4}
+.app-update-knoepfe{display:flex;gap:8px;margin-top:10px}
+.app-update-knoepfe a,.app-update-knoepfe button{flex:1;padding:12px 6px;font-size:17px;border:none;border-radius:10px;background:#fff;color:#2f3b45;text-align:center;text-decoration:none;font-weight:bold}
+.app-update-knoepfe a.start{background:#27ae60;color:#fff}
+.timer-hinweis{font-size:13px;color:#666;text-align:center;margin-top:8px}
+@keyframes timerBlinken{50%{background:#e74c3c}}
 .cat-faersen{background:#6c8ebf;}
+.cat-kuehe2{background:#1c5fbf}
 table{width:100%;border-collapse:collapse;font-size:18px}
 th,td{border-bottom:1px solid #ddd;padding:10px;text-align:right}
 th:first-child,td:first-child{text-align:left;font-weight:bold}
@@ -41,6 +92,7 @@ th:first-child,td:first-child{text-align:left;font-weight:bold}
 .inline-total-input{width:140px;font-size:18px}
 .agf{color:#b30000;font-weight:bold}
 .mlf{color:#003399;font-weight:bold}
+.wasser{color:#00838f;font-weight:bold}
 .plus{color:#008000;font-weight:bold}
 .minus{color:#c40000;font-weight:bold}
 .calc-box{max-width:380px;margin:auto;background:#fff;padding:14px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
@@ -155,8 +207,52 @@ font-size:16px;
   background:#f59e0b !important;
   color:white !important;
 }
-</style></head>
-<body><header>🐄 Futterrechner — Stall Ultra</header><div class="tabs">
+</style>
+<style>
+/* 📱 Handy-Ansicht: nichts darf breiter als der Bildschirm sein, sonst zoomt das Handy heraus (sieht aus wie PC-Seite).
+   Nur Aussehen – keine Änderung an Rechnen oder Inhalten. */
+*,*::before,*::after{box-sizing:border-box}
+#betrieb{padding-bottom:48px}   /* Platz unter den letzten Knöpfen (Teilen) */
+/* Ältere App-Versionen (1.0/1.1) auf Android 15+: Die App zeichnet bis unter Status- und Bedienleiste.
+   Damit nichts verdeckt wird, lässt die Seite dort selbst Platz (die App ab 1.2 macht das selbst). Nur Aussehen. */
+:root{--rand-oben:max(env(safe-area-inset-top,0px),40px);--rand-unten:max(env(safe-area-inset-bottom,0px),48px)}
+html.app-rand header{padding-top:calc(10px + var(--rand-oben))}
+html.app-rand body{padding-bottom:var(--rand-unten)}
+html.app-rand body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--rand-oben);background:#2f3b45;z-index:9998}
+html.app-rand #accessBlock,html.app-rand #freigabeBlock,html.app-rand #einladungBlock{padding-top:var(--rand-oben);padding-bottom:var(--rand-unten)}
+input,select,button{max-width:100%}
+td:first-child,th:first-child{overflow-wrap:anywhere}
+@media (max-width:640px){
+  header{font-size:18px;padding:10px}
+  .tab{flex:1 1 0;min-width:0;padding:12px 2px;font-size:14px;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere}
+  .panel{padding:8px}
+  .cat-header{font-size:17px;padding:12px}
+  .cat-body{padding:10px}
+  table{font-size:15px}
+  th,td{padding:7px 4px}
+  .total{font-size:16px;flex-wrap:wrap;gap:6px;padding:10px}
+  .kilo-btn,.save-btn{font-size:15px;padding:8px 10px;margin-left:0}
+  .inline-total-input{width:110px}
+  .warning-banner{font-size:16px;flex-wrap:wrap;gap:8px}
+  .history-header{font-size:18px}
+  .calc-btn{padding:16px 0}
+}
+@media (max-width:360px){
+  .tab{font-size:12px}
+  table{font-size:13px}
+  th,td{padding:6px 2px}
+}
+</style>
+<script>
+// Ältere App-Version (1.0/1.1) auf Android 15 oder neuer erkennen → Abstand zu Status-/Bedienleiste (siehe CSS app-rand)
+(function(){
+  var u=navigator.userAgent, alt=/FutterrechnerApp\/1\.[01](\D|$)/.test(u), v=/Android (\d+)/.exec(u);
+  if(alt && v && +v[1]>=15) document.documentElement.classList.add("app-rand");
+})();
+</script>
+</head>
+<body><header>🐄 Futterrechner — Stall Ultra<div style="font-size:12px;opacity:.9"><span id="sync-status"></span>
+<a id="betrieb-link" href="#" onclick="zumBetrieb();return false;" style="display:none;color:#fff;margin-left:10px">👥 Betrieb &amp; Geräte</a></div></header><div class="tabs">
   <div class="tab active" onclick="showTab('calc')">Rechner</div>
   <div class="tab" onclick="showTab('settings')">Einstellungen</div>
   <div class="tab" onclick="showTab('calc2')">Taschenrechner</div>
@@ -169,6 +265,7 @@ History
 </div>
 </div><div id="calc" class="panel"></div>
 <div id="settings" class="panel hidden"></div>
+<div id="betrieb" class="panel hidden"></div>
 <div id="calc2" class="panel hidden"></div>
   <div id="history" class="panel hidden"></div>
 
@@ -186,40 +283,81 @@ const firebaseConfig = {
   appId: "1:858916796951:web:dd614896bee4cbba6c7a52",
   measurementId: "G-X3YZD3B9L7"
 };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+// 🧪 Firebase-Testprojekt: wird NUR benutzt, wenn die Seite lokal läuft (localhost) oder auf der Test-Webseite
+// https://futterrechner-test-stall.web.app.
+// Auf GitHub Pages gilt immer firebaseConfig (echtes Projekt) – auch für die Testversion (github.io/futterrechner-test),
+// die dort aber nur liest (siehe „Testversion = Spiegel“).
+// Mit ?emulator=1 lokal: Firebase-Emulator auf dem PC.
+const testConfig = {
+  apiKey: "AIzaSyDwstyb3O-EB1uL-WsRv_QDHLpmKhqoB_o",
+  authDomain: "futterrechner-test-stall.firebaseapp.com",
+  projectId: "futterrechner-test-stall",
+  storageBucket: "futterrechner-test-stall.firebasestorage.app",
+  messagingSenderId: "38025092210",
+  appId: "1:38025092210:web:11b9d6f720baa29428f6eb"
+};
 const urlParams = new URLSearchParams(window.location.search);
+const istLokal = ["localhost","127.0.0.1"].includes(location.hostname);
+const istTestSeite = istLokal || ["futterrechner-test-stall.web.app","futterrechner-test-stall.firebaseapp.com"].includes(location.hostname);
+const mitEmulator = istLokal && urlParams.get("emulator")==="1";
+// Testversion: eigener Firebase-Name → eigene Geräte-Anmeldung und eigener Offline-Speicher, getrennt von der normalen App
+const fbApp = firebase.initializeApp(
+  !istTestSeite ? firebaseConfig :
+  mitEmulator ? { apiKey:"demo-key", authDomain:"localhost", projectId:"demo-futterrechner" } :
+  testConfig,
+  istTestversion ? "testversion" : undefined
+);
+const db = fbApp.firestore();
+const auth = fbApp.auth();
+if(mitEmulator){
+  db.useEmulator("localhost",8080);
+  auth.useEmulator("http://localhost:9099");
+}
+// 🧪 Testversion = Spiegel: liest die echten Daten, schreibt aber NIE außerhalb von „test/“ (Sicherheitsregel Fritz).
+// Einzige Ausnahme: dieses Gerät per PIN/QR-Code in den Betrieb aufnehmen (wie ein neues Handy, im selben Paket).
+// Alles andere wird hier abgefangen, bevor es Firestore erreicht.
+if(istTestversion){
+  (function(){
+    const F=firebase.firestore;
+    const sperre=ref=>{ const e=new Error("Testversion: nur lesen ("+ref.path+")"); e.code="testversion-nur-lesen"; return e; };
+    const erlaubt=(ref, art, imPaket)=>{
+      const p=ref.path.split("/"), uid=auth.currentUser && auth.currentUser.uid;
+      if(p[0]==="test") return true;
+      if(!imPaket || !uid) return false;
+      if(art==="set" && p.length===4 && p[0]==="betriebe" && p[2]==="geraete" && p[3]===uid) return true;
+      if(art==="set" && p.length===2 && p[0]==="geraetezuordnung" && p[1]===uid) return true;
+      if(art==="delete" && p.length===2 && p[0]==="einladungen") return true;
+      return false;
+    };
+    ["set","update","delete"].forEach(art=>{
+      const d=F.DocumentReference.prototype[art];
+      F.DocumentReference.prototype[art]=function(){ return erlaubt(this, art, false) ? d.apply(this, arguments) : Promise.reject(sperre(this)); };
+      const b=F.WriteBatch.prototype[art];
+      F.WriteBatch.prototype[art]=function(ref){ if(!erlaubt(ref, art, true)) throw sperre(ref); return b.apply(this, arguments); };
+    });
+    const add=F.CollectionReference.prototype.add;
+    F.CollectionReference.prototype.add=function(){ return this.path.split("/")[0]==="test" ? add.apply(this, arguments) : Promise.reject(sperre(this)); };
+    F.Firestore.prototype.runTransaction=function(){ return Promise.reject(sperre({ path:"(transaction)" })); };
+  })();
+}
+// Testversion: kurz zeigen, dass eine Änderung nicht gespeichert wird (die Hinweisleiste blinkt rot)
+function testversionHinweis(){
+  const b=document.getElementById("testversion-hinweis");
+  if(!b) return;
+  b.style.background="#c40000";
+  clearTimeout(testversionHinweis.t);
+  testversionHinweis.t=setTimeout(()=>{ b.style.background="#f2a900"; },2500);
+}
+// Offline-Speicher: im Stall ohne Netz läuft alles weiter, abgeglichen wird später
+db.enablePersistence({synchronizeTabs:true})
+  .catch(e=>console.log("Offline-Speicher nicht verfügbar:", e.code));
 const approveID = urlParams.get("approve");
 const denyID = urlParams.get("deny");
 
-async function handleApproval(){
-  if(approveID){
-    await db.collection("anfragen").doc(approveID).update({
-      status: "erlaubt"
-    });
-
-    // Zugriff speichern
-    const req = await db.collection("anfragen").doc(approveID).get();
-    const deviceID = req.data().deviceID;
-
-    await db.collection("zugriffe").doc(deviceID).set({
-      status: "erlaubt"
-    });
-
-    alert("Zugriff erlaubt!");
-  }
-
-  if(denyID){
-    await db.collection("anfragen").doc(denyID).update({
-      status: "abgelehnt"
-    });
-
-    alert("Zugriff abgelehnt!");
-  }
-}
 emailjs.init("d0IUYI7pT5TJM46BC");
 
-// Geräte-ID
+// Alte Geräte-ID (vor dem Umbau). Kein Sicherheitsmerkmal mehr – wird nur in der Anfrage mitgeschickt,
+// damit Fritz sieht, ob das Gerät früher schon freigegeben war.
 const deviceID = localStorage.getItem("deviceID") || Math.random().toString(36).substr(2, 9);
 localStorage.setItem("deviceID", deviceID);
 
@@ -257,13 +395,29 @@ const defaultGlobal={
   agfName:"AGF",mlfName:"MLF",
     bundesland:"Niedersachsen",
   agfKg:0.5,mlfKg:0.5,
+  wasserName:"Wasser",wasserKg:0.5,
   kueheName:"Kühe",
+  kuehe2Name:"Kühe Gruppe 2",
+  kuehe2Modus:"normal",   // "normal" = eigene Mischung, "aufwerten" = Rest der Kuh-Mischung + Zugabe (wie Restmischung)
   faersenName:"Färsen",
   bullenName:"Bullen",
   restbullenName:"Restmischung Bullen",   
   trockenName:"Trockensteher",
   kaelberName:"Kälber"
 };
+
+// Drittes Futter (Start-Name „Wasser“, in den Einstellungen änderbar) – funktioniert wie AGF/MLF.
+// Vorhandene Rationen und Lager bekommen es mit 0 kg dazu (0 kg wird nirgends mitgerechnet).
+function drittesFutterErgaenzen(){
+  // Leistungsgruppe 2: fehlt sie (z. B. altes Backup geladen), mit 0 Tieren und leerer Ration ergänzen
+  if(!data.kuehe2) data.kuehe2=kuehe2Laden();
+  if(!globalCfg.kuehe2Name) globalCfg.kuehe2Name=defaultGlobal.kuehe2Name;
+  ["kuehe","kuehe2","faersen","bullen","trocken","kaelber"].forEach(c=>{
+    if(data[c] && Array.isArray(data[c].items) && !data[c].items.some(i=>i.type==="wasser"))
+      data[c].items.push({type:"wasser",kg:0});
+  });
+  if(lagerData && !lagerData.wasser) lagerData.wasser={bestand:0,orange:5,rot:2,lieferzeit:2};
+}
 
 function defItems(){
   let a=[];
@@ -281,9 +435,13 @@ let globalCfg = {
 
 let saved=JSON.parse(localStorage.getItem("futter")||"{}");
 function buildCat(def){ return {anz:def,items:defItems(),collapsed:false}; }
+// Leistungsgruppe 2 (neu): wie eine normale Gruppe, dazu „rest“ = vorhandene Kuh-Mischung im Wagen (nur bei „aufwerten“)
+function kuehe2Laden(g){ const k = g || buildCat(0); if(typeof k.rest!=="number") k.rest=0; if(typeof k.ziel!=="number") k.ziel=0; return k; }
 
 let data={
   kuehe: saved.kuehe||buildCat(100),
+
+  kuehe2: kuehe2Laden(saved.kuehe2),
 
   faersen: saved.faersen||buildCat(30),
 
@@ -338,14 +496,16 @@ monate:{},
 wochen:{}
 };
 
-function save(){localStorage.setItem("futter",JSON.stringify(data))}
-function saveGlobal(){localStorage.setItem("gCfg",JSON.stringify(globalCfg))}
+// Speichern: wie bisher in den localStorage (Zwischenspeicher) + zusätzlich in den Betrieb in der Cloud
+function save(){localStorage.setItem("futter",JSON.stringify(data));cloudSpeichern("futter")}
+function saveGlobal(){localStorage.setItem("gCfg",JSON.stringify(globalCfg));cloudSpeichern("einstellungen")}
 
   function saveHistoryStorage(){
   localStorage.setItem(
     "history",
     JSON.stringify(historyData)
   );
+  cloudSpeichern("history");
 }
 
 function saveLagerStorage(){
@@ -353,6 +513,7 @@ function saveLagerStorage(){
     "lager",
     JSON.stringify(lagerData)
   );
+  cloudSpeichern("lager");
 }
 
 function saveLieferungen(){
@@ -360,6 +521,7 @@ function saveLieferungen(){
     "lieferungen",
     JSON.stringify(lieferungen)
   );
+  cloudSpeichern("lieferungen");
 }
 
 function saveHiddenWarnings(){
@@ -461,6 +623,7 @@ function saveHistory(cat){
       it.type==="agf" ? globalCfg.agfName :
 
       it.type==="mlf" ? globalCfg.mlfName :
+    it.type==="wasser" ? globalCfg.wasserName :
 
       it.name;
 
@@ -487,6 +650,13 @@ function saveHistory(cat){
       lagerData.mlf.bestand -= ges;
     }
 
+    if(it.type==="wasser"){
+
+      eintrag.wasser = (eintrag.wasser||0) + ges;
+
+      lagerData.wasser.bestand -= ges;
+    }
+
   });
 
   historyData.unshift(eintrag);
@@ -500,33 +670,47 @@ function saveHistory(cat){
   buildHistory();
 
 }
-  function calcAverage(produkt){
+function calcAverage(produkt){
 
-  let total = 0;
-
-  let tage = 0;
+  let tage = {};
 
   historyData.forEach(h=>{
 
-    if(produkt==="agf" && h.agf>0){
+    let wert = produkt==="agf"
+      ? (h.agf || 0)
+      : produkt==="wasser"
+      ? (h.wasser || 0)
+      : (h.mlf || 0);
 
-      total += h.agf;
+    if(wert<=0) return;
 
-      tage++;
-    }
+    if(!tage[h.datum])
+      tage[h.datum] = 0;
 
-    if(produkt==="mlf" && h.mlf>0){
-
-      total += h.mlf;
-
-      tage++;
-    }
+    tage[h.datum] += wert;
 
   });
 
-  if(tage<=0) return 0;
+let werte = Object.entries(tage)
+.sort((a,b)=>{
 
-  return total / tage;
+  let da = a[0].split(".").reverse().join("-");
+  let db = b[0].split(".").reverse().join("-");
+
+  return db.localeCompare(da);
+
+})
+.slice(0,14)
+.map(e=>e[1]);
+
+  if(werte.length===0)
+    return 0;
+
+  let total = 0;
+
+  werte.forEach(v=> total += v);
+
+  return total / werte.length;
 }
 
 function calcResttage(produkt){
@@ -733,6 +917,17 @@ function addArbeitstage(starttage,arbeitstage){
   );
 }
 
+  // F10: liegt "Bestellen bis" schon in der Vergangenheit, deutlich darauf hinweisen (Rechnung unverändert)
+  function bestellHinweis(produkt){
+  let d = getBestellDatum(produkt);
+  if(!d) return "";
+  let heute = new Date();
+  heute.setHours(0,0,0,0);
+  let tag = new Date(d);
+  tag.setHours(0,0,0,0);
+  return tag < heute ? "<br><b>⚠ Termin ist vorbei – sofort bestellen!</b>" : "";
+}
+
   function getWarnClass(produkt){
 
   let tage =
@@ -763,27 +958,87 @@ function addArbeitstage(starttage,arbeitstage){
   return "warn-green";
 }
 /* === RESTMISCHUNG BULLEN === */
+// Welche Mischungen gehen in die Restmischung? (Einstellungen, eine oder zwei; Standard: nur Kühe)
+const RESTMISCHUNG_GRUPPEN = ["kuehe","kuehe2","faersen","trocken","kaelber"];
+function restQuellen(){
+  let q = Array.isArray(globalCfg.restQuellen) ? globalCfg.restQuellen.filter(c=>RESTMISCHUNG_GRUPPEN.includes(c)) : [];
+  if(q.length===0) q=["kuehe"];
+  return q.slice(0,2);
+}
+// Für welche Gruppe wird die Restmischung gemacht? (Einstellungen; Standard: Bullen = genau wie bisher)
+const RESTMISCHUNG_ZIELE = ["bullen","kuehe","kuehe2","faersen","trocken","kaelber"];
+function restZiel(){ return RESTMISCHUNG_ZIELE.includes(globalCfg.restZiel) ? globalCfg.restZiel : "bullen"; }
+function restZielUmschalten(cat){
+  globalCfg.restZiel = cat;
+  // Tierzahl bleibt, Zielgewicht passend zur neuen Ration (wie bei Eingabe der Tierzahl)
+  let proTier = 0;
+  data[restZiel()].items.forEach(i=>{ if(i.kg>0) proTier += i.kg; });
+  data.restbullen.ziel = data.restbullen.anz * proTier;
+  saveGlobal();
+  save();
+  buildCalc();
+}
+function restMenge(i){ return i===0 ? data.restbullen.rest : (data.restbullen.rest2||0); }
+
+// Häkchen in den Einstellungen: eine oder zwei Mischungen
+function restQuelleUmschalten(cat, feld){
+  let q = restQuellen().slice();
+  if(feld.checked){
+    if(q.includes(cat)) return;
+    if(q.length>=2){ alert("Höchstens zwei Mischungen. Bitte zuerst eine abwählen."); feld.checked=false; return; }
+    q.push(cat);
+  } else {
+    if(q.length<=1){ alert("Mindestens eine Mischung muss ausgewählt sein."); feld.checked=true; return; }
+    q = q.filter(c=>c!==cat);
+  }
+  // Reihenfolge wie in der Liste (erstes Feld = erste Mischung)
+  globalCfg.restQuellen = RESTMISCHUNG_GRUPPEN.filter(c=>q.includes(c));
+  data.restbullen.rest2 = 0;
+  saveGlobal();
+  buildCalc();
+}
+
+// Zeilen der Restmischung: je Futter, wie viel davon schon in der/den vorhandenen Mischung(en) ist (Ist kg).
+// Bei EINER Mischung genau wie bisher (je Futter der Ration: Anteil × Restmenge).
+// Bei ZWEI Mischungen wird gleiches Futter (gleicher Name bzw. AGF/MLF) aus beiden Resten zusammengezählt.
+function restMischungZeilen(){
+  let zeilen=[];
+  restQuellen().forEach((cat,qi)=>{
+    let items=data[cat].items;
+    let total=0;
+    items.forEach(i=>total+=i.kg);
+    let rest=restMenge(qi);
+    items.forEach(it=>{
+      if(it.kg<=0) return;
+      let anteil = it.kg / total;
+      let ist = anteil * rest;
+      if(qi>0){
+        let z = zeilen.find(z=>(it.type||z.it.type) ? it.type===z.it.type : z.it.name===it.name);
+        if(z){ z.ist += ist; return; }
+      }
+      zeilen.push({ it, ist });
+    });
+  });
+  return zeilen;
+}
+
 function buildRestBullen(){
   let el=document.getElementById("calc");
-  let cow=data.kuehe.items;
-  let total=0;
-  cow.forEach(i=>total+=i.kg);
+  let quellen=restQuellen();
 
   let rest=data.restbullen.rest;
   let ziel=data.restbullen.ziel;
 
   let rows="";
-let lauf = rest;
+let lauf = rest + (quellen.length>1 ? (data.restbullen.rest2||0) : 0);
   
 
-let bull = data.bullen.items;
+let bull = data[restZiel()].items;
 
-cow.forEach(it=>{
-
-  if(it.kg<=0) return;
+restMischungZeilen().forEach(({it, ist})=>{
 
   // AGF / MLF nur wenn bei Bullen vorhanden UND kg > 0
-  if(it.type==="agf" || it.type==="mlf"){
+  if(it.type==="agf" || it.type==="mlf" || it.type==="wasser"){
     let exists = bull.some(b => b.type===it.type && b.kg>0);
     if(!exists) return;
   }
@@ -797,9 +1052,6 @@ let soll = bullItem
   ? bullItem.kg * (data.restbullen.anz || ziel / (bullItem.kg||1))
   : 0;
 
-let anteil = it.kg / total;
-let ist = anteil * rest;
-
 let diff = soll - ist;
 
 let zeit = "-";
@@ -809,6 +1061,9 @@ zeit=`<span class="agf">${fmt(Math.abs(diff)/globalCfg.agfKg)}</span>`;
 
 if(it.type==="mlf")
 zeit=`<span class="mlf">${fmt(Math.abs(diff)/globalCfg.mlfKg)}</span>`;
+
+if(it.type==="wasser")
+zeit=`<span class="wasser">${fmt(Math.abs(diff)/globalCfg.wasserKg)}</span>`;
 
 
   lauf += diff;
@@ -821,6 +1076,7 @@ let summe = lauf;
   let name =
     it.type==="agf" ? globalCfg.agfName :
     it.type==="mlf" ? globalCfg.mlfName :
+    it.type==="wasser" ? globalCfg.wasserName :
     it.name;
 
 rows += `
@@ -842,16 +1098,23 @@ rows += `
     </div>
 
     <div class="cat-body">
-      Restmischung vorhanden (kg)
+      ${quellen.length>1 ? `Restmischung ${globalCfg[quellen[0]+"Name"]} vorhanden (kg)` : "Restmischung vorhanden (kg)"}
       <input type="number"
       value="${rest}"
       oninput="data.restbullen.rest=num(this.value);"
-      onblur="buildCalc()">
+      onblur="save();buildCalc()">
+      ${quellen.length>1 ? `
+      <br><br>
+      Restmischung ${globalCfg[quellen[1]+"Name"]} vorhanden (kg)
+      <input type="number"
+      value="${data.restbullen.rest2||0}"
+      oninput="data.restbullen.rest2=num(this.value);"
+      onblur="save();buildCalc()">` : ""}
 
       <br><br>
 
 
-      Zielgewicht Bullenration (kg)
+      ${restZiel()==="bullen" ? "Zielgewicht Bullenration (kg)" : `Zielgewicht Ration ${globalCfg[restZiel()+"Name"]} (kg)`}
       <input type="number"
       value="${ziel}"
 oninput="
@@ -859,7 +1122,7 @@ data.restbullen.ziel=num(this.value);
 
 let proBulle = 0;
 
-data.bullen.items.forEach(i=>{
+data[restZiel()].items.forEach(i=>{
   if(i.kg>0) proBulle += i.kg;
 });
 
@@ -868,23 +1131,24 @@ proBulle > 0
 ? Math.round(data.restbullen.ziel / proBulle)
 : 0;
 "
-      onblur="buildCalc()">
+      onblur="save();buildCalc()">
 
 <br><br>
 
-Bullen (Anzahl)
+${restZiel()==="bullen" ? "Bullen" : globalCfg[restZiel()+"Name"]} (Anzahl)
 <input type="number"
 value="${data.restbullen.anz}"
 onblur="
 data.restbullen.anz = num(this.value);
 
 let proBulle = 0;
-data.bullen.items.forEach(i=>{
+data[restZiel()].items.forEach(i=>{
   if(i.kg>0) proBulle += i.kg;
 });
 
 data.restbullen.ziel = data.restbullen.anz * proBulle;
 
+save();
 buildCalc();
 ">
 
@@ -925,7 +1189,13 @@ ${alreadySavedToday('restbullen')
 }
  
 function saveRestBullenHistory(){
- 
+
+  // F2: wie bei saveHistory() nur einmal pro Tag speichern
+  if(alreadySavedToday("restbullen")){
+    alert("Heute bereits gespeichert");
+    return;
+  }
+
   let eintrag = {
 
     id: Date.now()+Math.random().toString(36).substr(2,5),
@@ -944,20 +1214,13 @@ function saveRestBullenHistory(){
 
     futter:[]
   };
-let cow = data.kuehe.items;
-let bull = data.bullen.items;
+let bull = data[restZiel()].items;
 
-let total = 0;
-cow.forEach(i => total += i.kg);
-
-let rest = data.restbullen.rest;
 let ziel = data.restbullen.ziel;
 
-cow.forEach(it=>{
+restMischungZeilen().forEach(({it, ist})=>{
 
-  if(it.kg<=0) return;
-
-  if(it.type==="agf" || it.type==="mlf"){
+  if(it.type==="agf" || it.type==="mlf" || it.type==="wasser"){
     let exists = bull.some(b=>b.type===it.type && b.kg>0);
     if(!exists) return;
   }
@@ -971,9 +1234,6 @@ cow.forEach(it=>{
     ? bullItem.kg * (data.restbullen.anz || ziel / (bullItem.kg||1))
     : 0;
 
-  let anteil = it.kg / total;
-  let ist = anteil * rest;
-
   let diff = soll - ist;
 
   if(diff <= 0) return;
@@ -981,6 +1241,7 @@ cow.forEach(it=>{
   let name =
     it.type==="agf" ? globalCfg.agfName :
     it.type==="mlf" ? globalCfg.mlfName :
+    it.type==="wasser" ? globalCfg.wasserName :
     it.name;
 
   eintrag.futter.push({
@@ -1000,10 +1261,18 @@ cow.forEach(it=>{
     lagerData.mlf.bestand -= diff;
   }
 
+  if(it.type==="wasser"){
+    eintrag.wasser = (eintrag.wasser||0) + diff;
+    lagerData.wasser.bestand -= diff;
+  }
+
 });
 historyData.unshift(eintrag);
 
 saveHistoryStorage();
+
+// F1: den abgezogenen Lagerbestand auch speichern
+saveLagerStorage();
 
 buildCalc();
 
@@ -1024,7 +1293,7 @@ function buildWarnings(){
 
   let html = "";
 
-  ["agf","mlf"].forEach(produkt=>{
+  ["agf","mlf","wasser"].forEach(produkt=>{
 
 let resttage = calcResttage(produkt);
 
@@ -1040,6 +1309,8 @@ if(warn !== "warn-red")
    let text =
 produkt === "agf"
 ? globalCfg.agfName
+: produkt === "wasser"
+? globalCfg.wasserName
 : globalCfg.mlfName;
     html += `
 
@@ -1063,25 +1334,188 @@ produkt === "agf"
   return html;
 }
   
+/* === LEISTUNGSGRUPPE 2 („Kühe Gruppe 2“) === */
+// Normal: rechnet und speichert genau wie Kühe/Färsen (eigene Mischung).
+// Aufwerten: ein Teil der Kuh-Mischung bleibt im Wagen (vorhanden kg), dazu kommt, was die Ration dieser Gruppe mehr braucht
+// (z. B. Kraftfutter). Gespeichert wird NUR die Zugabe – die Kuh-Mischung selbst speichert die Gruppe Kühe (nichts doppelt).
+function kuehe2Aufwerten(){ return globalCfg.kuehe2Modus==="aufwerten"; }
+function kuehe2ModusSetzen(m){ globalCfg.kuehe2Modus = m==="aufwerten" ? "aufwerten" : "normal"; saveGlobal(); buildSettings(); buildCalc(); }
+function kuehe2Einstellung(){
+  return `<div id="kuehe2-modus" style="margin:4px 0 12px 0">
+    Arbeitet als:
+    <select onchange="kuehe2ModusSetzen(this.value)">
+      <option value="normal" ${kuehe2Aufwerten()?"":"selected"}>eigene Mischung (normale Gruppe)</option>
+      <option value="aufwerten" ${kuehe2Aufwerten()?"selected":""}>Rest der ${globalCfg.kueheName}-Mischung + Zugabe</option>
+    </select>
+  </div>`;
+}
+function futterName(it){
+  return it.type==="agf"?globalCfg.agfName: it.type==="mlf"?globalCfg.mlfName: it.type==="wasser"?globalCfg.wasserName: it.name;
+}
+// Zeilen: je Futter, was schon in der vorhandenen Kuh-Mischung ist (Ist) und was die Ration der Gruppe 2 braucht (Soll)
+function kuehe2Zeilen(){
+  const g=data.kuehe2, basis=data.kuehe.items, ziel=g.items;
+  const total=basis.reduce((s,i)=>s+i.kg,0);
+  const gleich=(a,b)=>(a.type||b.type) ? a.type===b.type : a.name===b.name;
+  const zeilen=[];
+  basis.forEach(it=>{
+    if(it.kg<=0) return;
+    const z=ziel.find(b=>gleich(it,b));
+    zeilen.push({ it, ist: total>0 ? it.kg/total*g.rest : 0, soll: z ? z.kg*g.anz : 0 });
+  });
+  // Futter, das nur in der Ration der Gruppe 2 steht (z. B. zusätzliches Kraftfutter)
+  ziel.forEach(b=>{ if(b.kg>0 && !zeilen.some(z=>gleich(z.it,b))) zeilen.push({ it:b, ist:0, soll:b.kg*g.anz }); });
+  return zeilen;
+}
+function kuehe2AufwertenHtml(){
+  // Aufbau wie „Restmischung Bullen“ (gleiche Felder, Tabelle und Knopf)
+  const g=data.kuehe2;
+  let lauf=g.rest, rows="";
+  kuehe2Zeilen().forEach(({it,ist,soll})=>{
+    const diff=soll-ist;
+    lauf+=diff;
+    let zeit="-";
+    if(it.type==="agf") zeit=`<span class="agf">${fmt(Math.abs(diff)/globalCfg.agfKg)}</span>`;
+    if(it.type==="mlf") zeit=`<span class="mlf">${fmt(Math.abs(diff)/globalCfg.mlfKg)}</span>`;
+    if(it.type==="wasser") zeit=`<span class="wasser">${fmt(Math.abs(diff)/globalCfg.wasserKg)}</span>`;
+    rows+=`
+<tr>
+<td>${futterName(it)}</td>
+<td>${ist.toFixed(1)}</td>
+<td>${soll.toFixed(1)}</td>
+<td>${zeit}</td>
+<td class="${diff>=0?"plus":"minus"}">${lauf.toFixed(1)}</td>
+</tr>`;
+  });
+  const gespeichert=alreadySavedToday("kuehe2");
+  return `
+  <div class="category ${g.collapsed?"collapsed":""}">
+    <div class="cat-header cat-kuehe2"
+      onclick="data.kuehe2.collapsed=!data.kuehe2.collapsed;save();buildCalc();">
+      ${globalCfg.kuehe2Name}
+      <span>${g.collapsed?"▼":"▲"}</span>
+    </div>
+
+    <div class="cat-body">
+      Restmischung vorhanden (kg)
+      <input type="number"
+      value="${g.rest}"
+      oninput="data.kuehe2.rest=num(this.value);"
+      onblur="save();buildCalc()">
+
+      <br><br>
+
+      Zielgewicht Ration (kg)
+      <input type="number"
+      value="${g.ziel||0}"
+      oninput="data.kuehe2.ziel=num(this.value);let pro=0;data.kuehe2.items.forEach(i=>{if(i.kg>0)pro+=i.kg;});data.kuehe2.anz=pro>0?Math.round(data.kuehe2.ziel/pro):0;"
+      onblur="save();buildCalc()">
+
+      <br><br>
+
+      Tiere (Anzahl)
+      <input type="number"
+      value="${g.anz}"
+      onblur="data.kuehe2.anz=num(this.value);let pro=0;data.kuehe2.items.forEach(i=>{if(i.kg>0)pro+=i.kg;});data.kuehe2.ziel=data.kuehe2.anz*pro;save();buildCalc();">
+
+      <table>
+      <tr>
+      <th>Futter</th>
+      <th>Ist kg</th>
+      <th>Soll kg</th>
+      <th>Zeit</th>
+      <th>Summe</th>
+      </tr>
+        ${rows||"<tr><td colspan=5>–</td></tr>"}
+      </table>
+
+<div class="total">
+<button class="save-btn ${gespeichert?"saved":""}" ${gespeichert?"disabled":""} onclick="kuehe2Speichern()">
+${gespeichert?"Gespeichert":"Speichern"}
+</button>
+</div>
+
+    </div>
+  </div>`;
+}
+// Speichern bei „aufwerten“: nur was dazukommt (Soll − Ist > 0) – Kuh-Mischung ist schon bei Kühe gespeichert
+function kuehe2Speichern(){
+  if(alreadySavedToday("kuehe2")){ alert("Heute bereits gespeichert"); return; }
+  const e={ id: Date.now()+Math.random().toString(36).substr(2,5), datum:getToday(), kategorie:"kuehe2",
+    tiere:data.kuehe2.anz, gesamt:0, agf:0, mlf:0, futter:[], aufwertung:true };
+  kuehe2Zeilen().forEach(({it,ist,soll})=>{
+    const diff=soll-ist;
+    if(diff<0.05) return;   // nur echte Zugaben (kleine Rundungsreste nicht speichern)
+    e.futter.push({ name:futterName(it), kg:diff });
+    e.gesamt+=diff;
+    if(it.type==="agf"){ e.agf+=diff; lagerData.agf.bestand-=diff; }
+    if(it.type==="mlf"){ e.mlf+=diff; lagerData.mlf.bestand-=diff; }
+    if(it.type==="wasser"){ e.wasser=(e.wasser||0)+diff; lagerData.wasser.bestand-=diff; }
+  });
+  historyData.unshift(e);
+  saveHistoryStorage();
+  saveLagerStorage();
+  buildCalc();
+  buildHistory();
+}
+
+/* === KATEGORIEN EIN/AUS (Einstellungen) === */
+// Nur Anzeige auf dem Start: abgewählte Kategorien werden ausgeblendet. Daten, Rationen, Lager und Rechnung bleiben unverändert.
+// Reihenfolge wie auf dem Start; die Restmischung Bullen ist einzeln abwählbar.
+const ALLE_KATEGORIEN = ["kuehe","kuehe2","faersen","bullen","restbullen","trocken","kaelber"];
+function kategorieAn(cat){ return !(Array.isArray(globalCfg.kategorienAus) && globalCfg.kategorienAus.includes(cat)); }
+function kategorienAusblenden(){
+  let el=document.getElementById("calc"); if(!el) return;
+  el.querySelectorAll(".category").forEach(k=>{
+    let h=k.querySelector(".cat-header"); if(!h) return;
+    if(h.classList.contains("cat-kuehe2")) k.classList.add("gruppe2");
+    let cat=ALLE_KATEGORIEN.find(c=>h.classList.contains("cat-"+c));
+    if(cat && !kategorieAn(cat)) k.style.display="none";
+  });
+}
+// Neue Einstellungs-Bereiche auf- und zuklappen (nur auf diesem Gerät gemerkt, Standard: zugeklappt)
+let einstellungenZu = (()=>{ try{ return JSON.parse(localStorage.getItem("einstellungenZu")||"{}"); }catch(e){ return {}; } })();
+function einstellungZu(k){ return einstellungenZu[k]!==false; }
+function einstellungUmklappen(k){
+  einstellungenZu[k] = !einstellungZu(k);
+  try{ localStorage.setItem("einstellungenZu", JSON.stringify(einstellungenZu)); }catch(e){}
+  buildSettings();
+}
+function kategorieUmschalten(cat, feld){
+  let an = ALLE_KATEGORIEN.filter(kategorieAn);
+  if(feld.checked){ if(!an.includes(cat)) an.push(cat); }
+  else {
+    if(an.length<=1 && an.includes(cat)){ alert("Mindestens eine Kategorie muss angezeigt werden."); feld.checked=true; return; }
+    an = an.filter(c=>c!==cat);
+  }
+  globalCfg.kategorienAus = ALLE_KATEGORIEN.filter(c=>!an.includes(c));
+  saveGlobal();
+  buildCalc();
+}
+
 //rechner//
 
 function buildCalc(){
+  drittesFutterErgaenzen();
   let el=document.getElementById("calc");
   el.innerHTML="";
   el.innerHTML += buildWarnings();
 
   
-  // 👉 Kühe + Färsen
-  ["kuehe","faersen"].forEach(cat=>{
+  // 👉 Kühe + Färsen (dazwischen die Leistungsgruppe 2)
+  ["kuehe","kuehe2","faersen"].forEach(cat=>{
+    if(cat==="kuehe2" && kuehe2Aufwerten()){ el.innerHTML+=kuehe2AufwertenHtml(); return; }
     let sum=0,lauf=0,rows="";
     data[cat].items.forEach(it=>{
       if(it.kg<=0)return;
       let g=it.kg*data[cat].anz;
       let name=it.type==="agf"?globalCfg.agfName:
-               it.type==="mlf"?globalCfg.mlfName:it.name;
+               it.type==="mlf"?globalCfg.mlfName:
+               it.type==="wasser"?globalCfg.wasserName:it.name;
       let zeit="-";
       if(it.type==="agf")zeit=`<span class="agf">${fmt(g/globalCfg.agfKg)}</span>`;
       if(it.type==="mlf")zeit=`<span class="mlf">${fmt(g/globalCfg.mlfKg)}</span>`;
+      if(it.type==="wasser")zeit=`<span class="wasser">${fmt(g/globalCfg.wasserKg)}</span>`;
       lauf+=g;sum+=g;
       rows+=`<tr><td>${name}</td><td>${g.toFixed(1)}</td><td>${lauf.toFixed(1)}</td><td>${zeit}</td></tr>`;
     });
@@ -1140,10 +1574,12 @@ ${alreadySavedToday(cat)?
       if(it.kg<=0)return;
       let g=it.kg*data[cat].anz;
       let name=it.type==="agf"?globalCfg.agfName:
-               it.type==="mlf"?globalCfg.mlfName:it.name;
+               it.type==="mlf"?globalCfg.mlfName:
+               it.type==="wasser"?globalCfg.wasserName:it.name;
       let zeit="-";
       if(it.type==="agf")zeit=`<span class="agf">${fmt(g/globalCfg.agfKg)}</span>`;
       if(it.type==="mlf")zeit=`<span class="mlf">${fmt(g/globalCfg.mlfKg)}</span>`;
+      if(it.type==="wasser")zeit=`<span class="wasser">${fmt(g/globalCfg.wasserKg)}</span>`;
       lauf+=g;sum+=g;
       rows+=`<tr><td>${name}</td><td>${g.toFixed(1)}</td><td>${lauf.toFixed(1)}</td><td>${zeit}</td></tr>`;
     });
@@ -1202,10 +1638,12 @@ ${alreadySavedToday(cat)?
       if(it.kg<=0)return;
       let g=it.kg*data[cat].anz;
       let name=it.type==="agf"?globalCfg.agfName:
-               it.type==="mlf"?globalCfg.mlfName:it.name;
+               it.type==="mlf"?globalCfg.mlfName:
+               it.type==="wasser"?globalCfg.wasserName:it.name;
       let zeit="-";
       if(it.type==="agf")zeit=`<span class="agf">${fmt(g/globalCfg.agfKg)}</span>`;
       if(it.type==="mlf")zeit=`<span class="mlf">${fmt(g/globalCfg.mlfKg)}</span>`;
+      if(it.type==="wasser")zeit=`<span class="wasser">${fmt(g/globalCfg.wasserKg)}</span>`;
       lauf+=g;sum+=g;
       rows+=`<tr><td>${name}</td><td>${g.toFixed(1)}</td><td>${lauf.toFixed(1)}</td><td>${zeit}</td></tr>`;
     });
@@ -1253,6 +1691,8 @@ ${alreadySavedToday(cat)?
       </div>
     </div>`;
   });
+  kategorienAusblenden();
+  timerEinbauen("calc");
 }
 
 
@@ -1260,6 +1700,7 @@ ${alreadySavedToday(cat)?
 /* === SETTINGS === */
 
   function buildSettings(){
+  drittesFutterErgaenzen();
   let s=document.getElementById("settings");
 
   s.innerHTML=`
@@ -1371,7 +1812,30 @@ Thüringen
     onblur="buildSettings();"><br>
 
   kg/s <input type="number" value="${globalCfg.mlfKg}" 
-    oninput="globalCfg.mlfKg=num(this.value)||0.01;saveGlobal();buildCalc();"><hr>
+    oninput="globalCfg.mlfKg=num(this.value)||0.01;saveGlobal();buildCalc();">
+  <span class="drittes-futter"><br><br>
+  3. Futter Name <input value="${globalCfg.wasserName}" 
+    oninput="globalCfg.wasserName=this.value;saveGlobal();buildCalc();" 
+    onblur="buildSettings();"><br>
+
+  kg/s <input type="number" value="${globalCfg.wasserKg}" 
+    oninput="globalCfg.wasserKg=num(this.value)||0.01;saveGlobal();buildCalc();"></span><hr>
+  `;
+
+  // 👉 Kategorien auf dem Start anzeigen (Häkchen)
+  s.innerHTML+=`
+  <div id="kategorien-wahl" class="history-box">
+    <div class="history-header" style="margin-bottom:0" onclick="einstellungUmklappen('kategorien')">
+    ${einstellungZu('kategorien') ? "▶" : "▼"} Kategorien auf dem Start anzeigen
+    </div>
+    <div class="klapp-inhalt" style="display:${einstellungZu('kategorien') ? 'none' : 'block'};margin-top:6px">
+    ${ALLE_KATEGORIEN.map(c=>`
+    <label style="display:inline-block;margin:6px 12px 0 0">
+      <input type="checkbox" ${kategorieAn(c)?"checked":""} onchange="kategorieUmschalten('${c}',this)">
+      ${globalCfg[c+"Name"]}
+    </label>`).join("")}
+    </div>
+  </div>
   `;
 
   // 👉 Restmischung Name
@@ -1379,22 +1843,42 @@ Thüringen
   <h3 class="editable" id="edit-restbullen">
   ${globalCfg.restbullenName}<span class="stift">✎</span>
   </h3>
+  <div id="restquellen-wahl" class="history-box" style="margin-top:10px">
+    <div class="history-header" style="margin-bottom:0" onclick="einstellungUmklappen('restmischung')">
+    ${einstellungZu('restmischung') ? "▶" : "▼"} Reste für die Restmischung
+    </div>
+    <div class="klapp-inhalt" style="display:${einstellungZu('restmischung') ? 'none' : 'block'};margin-top:6px">
+    Mischung(en) für die Restmischung (eine oder zwei):<br>
+    ${RESTMISCHUNG_GRUPPEN.map(c=>`
+    <label style="display:inline-block;margin:6px 12px 0 0">
+      <input type="checkbox" ${restQuellen().includes(c)?"checked":""} onchange="restQuelleUmschalten('${c}',this)">
+      ${globalCfg[c+"Name"]}
+    </label>`).join("")}
+    <br><br>
+    Restmischung ist für:
+    <select id="restziel-wahl" onchange="restZielUmschalten(this.value)">
+      ${RESTMISCHUNG_ZIELE.map(c=>`<option value="${c}" ${restZiel()===c?"selected":""}>${globalCfg[c+"Name"]}</option>`).join("")}
+    </select>
+    </div>
+  </div>
   `;
 
   // 👉 Kategorien aufbauen
-  ["kuehe","faersen","bullen","trocken","kaelber"].forEach(cat=>{
+  ["kuehe","kuehe2","faersen","bullen","trocken","kaelber"].forEach(cat=>{
     s.innerHTML+=`
     <h3 class="editable" id="edit-${cat}">
     ${globalCfg[cat+"Name"]}<span class="stift">✎</span>
     </h3>
     `;
+    if(cat==="kuehe2") s.innerHTML+=kuehe2Einstellung();
 
     data[cat].items.forEach((it,i)=>{
       let name=it.type==="agf"?globalCfg.agfName:
-               it.type==="mlf"?globalCfg.mlfName:it.name;
+               it.type==="mlf"?globalCfg.mlfName:
+               it.type==="wasser"?globalCfg.wasserName:it.name;
 
       s.innerHTML+=`
-      <div class="sort-row">
+      <div class="sort-row ${it.type==='wasser'?'drittes-futter':''}">
         ${sortMode?`
         <div class="sort-arrows">
           <button class="sort-btn" onclick="moveItem('${cat}',${i},-1)">▲</button>
@@ -1405,6 +1889,7 @@ Thüringen
           <input type="text" value="${name}" oninput="
             if('${it.type}'==='agf'){globalCfg.agfName=this.value;saveGlobal();}
             else if('${it.type}'==='mlf'){globalCfg.mlfName=this.value;saveGlobal();}
+            else if('${it.type}'==='wasser'){globalCfg.wasserName=this.value;saveGlobal();}
             else{data['${cat}'].items[${i}].name=this.value;save();}
             buildCalc();
           ">
@@ -1416,8 +1901,11 @@ Thüringen
     });
   });
 
+  // Abschnitt „Kühe Gruppe 2“ kennzeichnen (nur eine Klasse, Aussehen unverändert)
+  for(let e=document.getElementById("edit-kuehe2"); e && e.id!=="edit-faersen"; e=e.nextElementSibling) e.classList.add("gruppe2");
+
   // 👉 EVENTS (JETZT RICHTIG!)
-  ["kuehe","faersen","bullen","trocken","kaelber"].forEach(cat=>{
+  ["kuehe","kuehe2","faersen","bullen","trocken","kaelber"].forEach(cat=>{
     let el=document.getElementById("edit-"+cat);
     if(!el) return;
 
@@ -1535,6 +2023,10 @@ function deleteHistory(id){
   lagerData.mlf.bestand +=
   eintrag.mlf || 0;
 
+  if(lagerData.wasser)
+  lagerData.wasser.bestand +=
+  eintrag.wasser || 0;
+
   historyData =
   historyData.filter(h=>h.id!==id);
 
@@ -1551,6 +2043,7 @@ function getKategorien(){
 
   return [
     "kuehe",
+    "kuehe2",
     "bullen",
     "faersen",
     "kaelber",
@@ -1697,13 +2190,41 @@ function getKategorieName(cat){
 
 }
   
+// Mengen im History-Tab: ab 1000 kg in Tonnen (kürzere Zahlen), darunter in kg. Gespeichert wird weiter in kg.
+function mengeText(kg){ return Math.abs(kg)>=1000 ? (kg/1000).toFixed(2)+" t" : kg.toFixed(1)+" kg"; }
+
+// Alte Jahre löschen (Knopf im History-Tab): Einträge aus früheren Jahren weg – vorher Backup.
+// Die letzten 31 Tage bleiben immer (daraus rechnet das Lager „Ø Verbrauch“ / „Reicht noch“). Lager und Lieferungen bleiben.
+function eintragDatum(e){ const d=(e.datum||"").split("."); return new Date(+d[2], +d[1]-1, +d[0]); }
+function alteEintraege(){
+  const heute=new Date(), jahr=heute.getFullYear(), grenze=new Date(heute.getFullYear(), heute.getMonth(), heute.getDate()-31);
+  return historyData.filter(e=>{ const d=eintragDatum(e); return !isNaN(d) && d.getFullYear()<jahr && d<grenze; });
+}
+function alteJahre(){ return [...new Set(alteEintraege().map(e=>eintragDatum(e).getFullYear()))].sort(); }
+function alteJahreLoeschen(){
+  const weg=alteEintraege();
+  if(!weg.length) return;
+  if(!confirm("Alle gespeicherten Werte der Gruppen aus "+alteJahre().join(", ")+" löschen ("+weg.length+" Einträge)?\n\n"+
+    "Vorher wird automatisch ein Backup erstellt. Lagerbestand und Lieferungen bleiben.\nDas gilt für alle Geräte des Betriebs.")) return;
+  exportBackup();
+  const raus=new Set(weg);
+  historyData=historyData.filter(e=>!raus.has(e));
+  saveHistoryStorage();
+  buildHistory();
+  buildCalc();
+  alert(weg.length+" alte Einträge gelöscht.");
+}
 function buildHistory(){
+
+  drittesFutterErgaenzen();
 
   let h = document.getElementById("history");
 
   let agfRest = calcResttage("agf");
 
   let mlfRest = calcResttage("mlf");
+
+  let wasserRest = calcResttage("wasser");
 
   h.innerHTML = `
 
@@ -1801,13 +2322,13 @@ Jahressumme
 <br><br>
 
 Gesamt:
-${historyData
+${mengeText(historyData
 .filter(e=>
   e.kategorie===cat &&
   e.datum.split(".")[2]===jahr
 )
 .reduce((s,e)=>s+e.gesamt,0)
-.toFixed(1)} kg
+)}
 <br><br>
 
 ${(() => {
@@ -1846,7 +2367,7 @@ padding:4px 0;
 
 <span>${name}</span>
 
-<span>${kg.toFixed(1)} kg</span>
+<span>${mengeText(kg)}</span>
 
 </div>
 
@@ -1901,14 +2422,14 @@ Monatssumme
 <br><br>
 
 Gesamt:
-${historyData
+${mengeText(historyData
 .filter(e=>
   e.kategorie===cat &&
   e.datum.split(".")[2]===jahr &&
   e.datum.split(".")[1]===monat
 )
 .reduce((s,e)=>s+e.gesamt,0)
-.toFixed(1)} kg
+)}
 <br><br>
 
 ${(() => {
@@ -1948,7 +2469,7 @@ padding:4px 0;
 
 <span>${name}</span>
 
-<span>${kg.toFixed(1)} kg</span>
+<span>${mengeText(kg)}</span>
 
 </div>
 
@@ -2004,9 +2525,9 @@ Wochensumme
 <br><br>
 
 Gesamt:
-${getTage(cat,jahr,monat,woche)
+${mengeText(getTage(cat,jahr,monat,woche)
 .reduce((s,e)=>s+e.gesamt,0)
-.toFixed(1)} kg
+)}
 <br><br>
 
 ${(() => {
@@ -2039,7 +2560,7 @@ padding:4px 0;
 
 <span>${name}</span>
 
-<span>${kg.toFixed(1)} kg</span>
+<span>${mengeText(kg)}</span>
 
 </div>
 
@@ -2070,7 +2591,7 @@ ${e.tiere}
 <br>
 
 Gesamt:
-${e.gesamt.toFixed(1)} kg
+${mengeText(e.gesamt)}
 
 <br><br>
 
@@ -2086,7 +2607,7 @@ border-bottom:1px solid #eee;
 
 <span>${f.name}</span>
 
-<span>${f.kg.toFixed(1)} kg</span>
+<span>${mengeText(f.kg)}</span>
 
 </div>
 
@@ -2314,7 +2835,7 @@ Bestellen bis:
 
 ${formatDatum(
   getBestellDatum("agf")
-)}
+)}${bestellHinweis("agf")}
 
       </span>
 
@@ -2350,7 +2871,43 @@ Bestellen bis:
 
 ${formatDatum(
   getBestellDatum("mlf")
-)}
+)}${bestellHinweis("mlf")}
+
+      </span>
+
+      </div>
+
+
+      <div class="lager-card drittes-futter">
+
+      <b>${globalCfg.wasserName}</b><br>
+
+      Bestand:
+      ${lagerData.wasser.bestand.toFixed(1)} kg<br>
+
+      Ø Verbrauch:
+      ${calcAverage("wasser").toFixed(1)} kg/Tag<br>
+
+      <span class="${getWarnClass("wasser")}">
+
+  ${wasserRest<=0
+
+?"Bestand leer"
+
+:`Reicht noch ca.
+${wasserRest.toFixed(1)} Tage`
+
+}
+
+<br><br>
+
+Bestellen bis:
+
+<br>
+
+${formatDatum(
+  getBestellDatum("wasser")
+)}${bestellHinweis("wasser")}
 
       </span>
 
@@ -2383,6 +2940,10 @@ ${globalCfg.agfName}
 
 <option value="mlf">
 ${globalCfg.mlfName}
+</option>
+
+<option value="wasser" class="drittes-futter">
+${globalCfg.wasserName}
 </option>
 
       </select>
@@ -2426,6 +2987,8 @@ margin-bottom:8px;
 
 ${l.produkt==="agf"
 ?globalCfg.agfName
+:l.produkt==="wasser"
+?globalCfg.wasserName
 :globalCfg.mlfName}
 
 </div>
@@ -2532,6 +3095,41 @@ onblur="
 buildHistory();
 buildCalc();
 ">
+<span class="drittes-futter">
+    <br><br>
+
+   ${globalCfg.wasserName} Orange
+
+    <input
+    type="number"
+    value="${lagerData.wasser.orange}"
+
+    oninput="
+lagerData.wasser.orange=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+
+${globalCfg.wasserName} Rot
+
+<input
+type="number"
+value="${lagerData.wasser.rot}"
+
+oninput="
+lagerData.wasser.rot=num(this.value);
+saveLagerStorage();
+"
+
+onblur="
+buildHistory();
+buildCalc();
+">
+</span>
     </div>
 <br><br>
 
@@ -2560,6 +3158,16 @@ document
 Backup laden
 
 </button>
+${alteJahre().length ? `
+<button
+id="alte-jahre-loeschen"
+class="save-btn"
+style="background:#b30000"
+onclick="alteJahreLoeschen()">
+
+Alte Jahre löschen (${alteJahre().join(", ")})
+
+</button>` : ""}
   </div>`;
   updateHistoryTabColor();
 
@@ -2603,6 +3211,13 @@ function exportBackup(){
   event.target.files[0];
 
   if(!file) return;
+
+  // F4: vorher fragen – das Backup ersetzt alle Daten des Betriebs (auf allen Geräten)
+  if(!confirm("Alle Daten des Betriebs durch dieses Backup ersetzen?\n\nDas gilt für alle Geräte des Betriebs.")){
+    if(event.target && "value" in event.target) event.target.value="";
+    return false;
+  }
+  if(event.target && "value" in event.target) event.target.value="";
 
   let reader =
   new FileReader();
@@ -2651,9 +3266,12 @@ alert("Backup geladen");
   };
 
   reader.readAsText(file);
+  return true;
 
 }
 function updateHistoryTabColor(){
+
+  drittesFutterErgaenzen();
 
   let tab =
   document.getElementById("history-tab");
@@ -2671,16 +3289,21 @@ function updateHistoryTabColor(){
   let mlf =
   getWarnClass("mlf");
 
+  let wasser =
+  getWarnClass("wasser");
+
   if(
     agf==="warn-red" ||
-    mlf==="warn-red"
+    mlf==="warn-red" ||
+    wasser==="warn-red"
   ){
     tab.classList.add("tab-red");
   }
 
   else if(
     agf==="warn-orange" ||
-    mlf==="warn-orange"
+    mlf==="warn-orange" ||
+    wasser==="warn-orange"
   ){
     tab.classList.add("tab-orange");
   }
@@ -2689,6 +3312,40 @@ function updateHistoryTabColor(){
 let expr="",history=JSON.parse(localStorage.getItem("calcHist"))||[];
 
   let historyWarnClass = "";
+
+// F8: eigene kleine Rechenlogik statt eval (nur Zahlen und + - * /, Punkt vor Strich).
+// Ergebnis auf 12 gültige Stellen gerundet, damit z. B. 0.1+0.2 = 0.3 angezeigt wird.
+function rechneAusdruck(text){
+  let i=0;
+  const zahl=()=>{
+    const m=/^(\d+\.?\d*|\.\d+)/.exec(text.slice(i));
+    if(!m) throw new Error("Zahl erwartet");
+    i+=m[0].length;
+    return parseFloat(m[0]);
+  };
+  const faktor=()=>{
+    if(text[i]==="-"){ i++; return -faktor(); }
+    if(text[i]==="+"){ i++; return faktor(); }
+    return zahl();
+  };
+  const term=()=>{
+    let w=faktor();
+    while(text[i]==="*" || text[i]==="/"){
+      const op=text[i++];
+      const b=faktor();
+      w = op==="*" ? w*b : w/b;
+    }
+    return w;
+  };
+  let w=term();
+  while(text[i]==="+" || text[i]==="-"){
+    const op=text[i++];
+    const b=term();
+    w = op==="+" ? w+b : w-b;
+  }
+  if(i!==text.length || !isFinite(w)) throw new Error("ungültig");
+  return parseFloat(w.toPrecision(12));
+}
 
 function press(v){
   if(v==="C"){expr="";update();return;}
@@ -2701,7 +3358,7 @@ function press(v){
 
   if(v==="="){
     try{
-      let r=eval(expr);
+      let r=rechneAusdruck(expr);
       history.unshift(expr+" = "+r);
       history=history.slice(0,20);
       localStorage.setItem("calcHist",JSON.stringify(history));
@@ -2727,139 +3384,1612 @@ function buildCalc2(){
   onclick="press('${v}')">${v}</button>`).join("")}
   </div><div id="hist" class="calc-history"></div></div>`;
   renderHist();
+  timerEinbauen("calc2");
 }
 
-// 🔐 Zugriff Funktionen
+/* === TIMER (Countdown + Stoppuhr) === */
+// Eigenständig: rechnet nichts am Futter, speichert nur den eigenen Zustand auf diesem Gerät (localStorage „timer“).
+// Läuft über die Uhrzeit (Endzeitpunkt), damit er auch nach Pausen des Handys richtig weiterzählt.
+const TIMER_ORT = "calc";   // Timer steht auf dem Rechner (Wunsch Fritz 23.10.2026)
+let timer = (()=>{ try{ return JSON.parse(localStorage.getItem("timer")||"null"); }catch(e){ return null; } })()
+  || { modus:"countdown", dauer:480, rest:480, ende:0, laeuft:false, gestoppt:0, start:0, alarm:false, zu:false };
+let timerTon=null, timerAlarmTakt=null, timerWachHalten=null;
+
+// App-Version aus dem Kennzeichen der App („FutterrechnerApp/1.3“); im Browser null
+const APP_VERSION = (/FutterrechnerApp\/([\d.]+)/.exec(navigator.userAgent)||[])[1] || null;
+const APP_NEUESTE = "1.3";
+function appVersionAlt(){
+  if(!APP_VERSION) return false;
+  const a=APP_VERSION.split(".").map(Number), n=APP_NEUESTE.split(".").map(Number);
+  for(let i=0;i<n.length;i++){ if((a[i]||0)!==n[i]) return (a[i]||0)<n[i]; }
+  return false;
+}
+// Wecker der App (klingelt auch bei ausgeschaltetem Bildschirm) – nur in der App ab Version 1.3
+function timerAppWecker(){ return !!(window.FutterrechnerApp && FutterrechnerApp.alarmStellen); }
+function timerApp(art){
+  try{
+    if(!timerAppWecker()) return;
+    if(art==="stellen") FutterrechnerApp.alarmStellen(timer.ende);
+    else FutterrechnerApp.alarmLoeschen();
+  }catch(e){}
+}
+// Hinweis oben auf dem Rechner, solange auf diesem Handy noch eine ältere App läuft („Später“ blendet ihn bis morgen aus)
+const APP_LADEN = "https://raw.githubusercontent.com/taupke-pixel/Futterrechner/main/app/futterrechner.apk";
+function appUpdateHinweis(){
+  if(!appVersionAlt()) return "";
+  let spaeter=null; try{ spaeter=localStorage.getItem("appUpdateSpaeter"); }catch(e){}
+  if(spaeter===getToday()) return "";
+  return `<div class="app-update" id="app-update">
+    <b>📲 Neue App-Version ${APP_NEUESTE}</b><br>
+    Timer-Alarm auch bei ausgeschaltetem Bildschirm. Einmal aktualisieren – Daten und Zugang bleiben.
+    <div class="app-update-knoepfe">
+      <a class="start" href="${APP_LADEN}">Jetzt aktualisieren</a>
+      <button onclick="try{localStorage.setItem('appUpdateSpaeter',getToday())}catch(e){};document.getElementById('app-update').remove()">Später</button>
+    </div>
+  </div>`;
+}
+
+function timerMerken(){ try{ localStorage.setItem("timer", JSON.stringify(timer)); }catch(e){} }
+function timerSekunden(){
+  if(timer.modus==="countdown") return timer.laeuft ? Math.max(0,(timer.ende-Date.now())/1000) : timer.rest;
+  return timer.laeuft ? (Date.now()-timer.start)/1000 : timer.gestoppt;
+}
+function timerText(s){
+  s = timer.modus==="countdown" ? Math.ceil(s-1e-9) : Math.floor(s);
+  const h=Math.floor(s/3600), m=Math.floor(s%3600/60), sek=Math.floor(s%60);
+  const zwei=x=>String(x).padStart(2,"0");
+  return (h>0 ? h+":"+zwei(m) : zwei(m))+":"+zwei(sek);
+}
+function timerInhalt(){
+  const cd = timer.modus==="countdown";
+  return `
+    ${timer.alarm ? `<div class="timer-alarm">⏰ Zeit ist um!<br><button onclick="timerAlarmAus()">Alarm aus</button></div>` : ""}
+    <div class="timer-modus">
+      <button class="${cd?"aktiv":""}" onclick="timerModus('countdown')">Countdown</button>
+      <button class="${cd?"":"aktiv"}" onclick="timerModus('stoppuhr')">Stoppuhr</button>
+    </div>
+    <div class="timer-anzeige" id="timer-anzeige">${timerText(timerSekunden())}</div>
+    ${cd && !timer.laeuft ? `
+    <div class="timer-zeit">
+      <label><input type="number" min="0" id="timer-min" value="${Math.floor(timer.dauer/60)}" onchange="timerDauer()"> Min</label>
+      <label><input type="number" min="0" max="59" id="timer-sek" value="${timer.dauer%60}" onchange="timerDauer()"> Sek</label>
+    </div>
+    <div class="timer-schnell">
+      <button onclick="timerPlus(60)">+1 Min</button>
+      <button onclick="timerPlus(300)">+5 Min</button>
+      <button onclick="timerPlus(600)">+10 Min</button>
+    </div>
+    <div class="timer-schnell">
+      <button onclick="timerPlus(-60)">−1 Min</button>
+      <button onclick="timerPlus(-300)">−5 Min</button>
+      <button onclick="timerPlus(-600)">−10 Min</button>
+    </div>` : ""}
+    <div class="timer-knoepfe">
+      ${timer.laeuft
+        ? `<button class="pause" onclick="timerPause()">Pause</button>`
+        : `<button class="start" onclick="timerStart()">${(cd ? timer.rest<timer.dauer && timer.rest>0 : timer.gestoppt>0) ? "Weiter" : "Start"}</button>`}
+      <button onclick="timerZurueck()">Zurücksetzen</button>
+    </div>
+    ${timer.laeuft ? `<div class="timer-hinweis">${timer.modus==="countdown" && timerAppWecker()
+      ? "Der Alarm kommt auch bei ausgeschaltetem Bildschirm."
+      : "Der Bildschirm bleibt an, solange der Timer läuft."}</div>` : ""}`;
+}
+function timerEinbauen(ort){
+  if(ort!==TIMER_ORT) return;
+  const el=document.getElementById(ort);
+  if(!el) return;
+  const hinweis=appUpdateHinweis();
+  if(hinweis) el.insertAdjacentHTML("afterbegin", hinweis);
+  if(ort==="calc"){
+    el.insertAdjacentHTML("beforeend", `
+    <div class="category ${timer.zu?'collapsed':''}" id="timer-kasten">
+      <div class="cat-header cat-timer" onclick="timer.zu=!timer.zu;timerMerken();buildCalc();">
+        ⏱ Timer<span>${timer.zu?'▼':'▲'}</span>
+      </div>
+      <div class="cat-body" id="timer-box">${timerInhalt()}</div>
+    </div>`);
+  } else {
+    el.insertAdjacentHTML("beforeend", `<div class="calc-box" id="timer-kasten" style="margin-top:14px"><b style="font-size:20px">⏱ Timer</b><div id="timer-box" style="margin-top:10px">${timerInhalt()}</div></div>`);
+  }
+}
+function timerNeuZeichnen(){ const b=document.getElementById("timer-box"); if(b) b.innerHTML=timerInhalt(); }
+function timerModus(m){
+  if(timer.laeuft || timer.modus===m) { if(timer.modus!==m) alert("Bitte zuerst den laufenden Timer anhalten."); return; }
+  timer.modus=m; timerMerken(); timerNeuZeichnen();
+}
+function timerDauer(){
+  const m=Math.max(0,Math.floor(num(document.getElementById("timer-min").value)||0));
+  const s=Math.min(59,Math.max(0,Math.floor(num(document.getElementById("timer-sek").value)||0)));
+  timer.dauer=m*60+s; timer.rest=timer.dauer; timerMerken(); timerNeuZeichnen();
+}
+// + und − Minuten (nie unter 0 Sekunden)
+function timerPlus(s){ timer.dauer=Math.max(0, timer.dauer+s); timer.rest=timer.dauer; timerMerken(); timerNeuZeichnen(); }
+function timerStart(){
+  timerTonVorbereiten();
+  if(timer.modus==="countdown"){
+    if(timer.rest<=0) timer.rest=timer.dauer;
+    if(timer.rest<=0) return;
+    timer.ende=Date.now()+timer.rest*1000;
+  } else {
+    timer.start=Date.now()-timer.gestoppt*1000;
+  }
+  timer.laeuft=true; timerMerken(); timerNeuZeichnen(); timerBildschirmAn(true);
+  if(timer.modus==="countdown") timerApp("stellen");
+}
+function timerPause(){
+  if(timer.modus==="countdown") timer.rest=timerSekunden(); else timer.gestoppt=timerSekunden();
+  timer.laeuft=false; timerMerken(); timerNeuZeichnen(); timerBildschirmAn(false);
+  timerApp("loeschen");
+}
+function timerZurueck(){
+  timer.laeuft=false; timer.rest=timer.dauer; timer.gestoppt=0; timerAlarmAus(); timerMerken(); timerNeuZeichnen(); timerBildschirmAn(false);
+}
+// Bildschirm anlassen, solange der Timer läuft (wenn Handy/Browser das kann)
+async function timerBildschirmAn(an){
+  try{
+    if(an && !timerWachHalten && navigator.wakeLock) timerWachHalten = await navigator.wakeLock.request("screen");
+    if(!an && timerWachHalten){ await timerWachHalten.release(); timerWachHalten=null; }
+  }catch(e){ timerWachHalten=null; }
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){ timerWachHalten=null; if(timer.laeuft) timerBildschirmAn(true); timerTakt(); }
+});
+// Ton: beim Drücken auf Start vorbereiten (Handys erlauben Ton nur nach einem Fingertipp)
+function timerTonVorbereiten(){
+  try{
+    if(!timerTon) timerTon=new (window.AudioContext||window.webkitAudioContext)();
+    if(timerTon.state==="suspended") timerTon.resume();
+  }catch(e){ timerTon=null; }
+}
+function timerPiep(){
+  try{
+    if(!timerTon) return;
+    [0,0.25,0.5].forEach(v=>{
+      const o=timerTon.createOscillator(), g=timerTon.createGain();
+      o.frequency.value=880; o.type="square"; g.gain.value=0.3;
+      o.connect(g); g.connect(timerTon.destination);
+      o.start(timerTon.currentTime+v); o.stop(timerTon.currentTime+v+0.15);
+    });
+  }catch(e){}
+  try{ if(navigator.vibrate) navigator.vibrate([400,200,400]); }catch(e){}
+}
+function timerAlarmAn(){
+  timer.alarm=true; timer.laeuft=false; timer.rest=0; timerMerken();
+  timerBildschirmAn(false);
+  if(!timerAlarmTakt){ timerPiep(); timerAlarmTakt=setInterval(timerPiep,1200); }
+  timerNeuZeichnen();
+}
+function timerAlarmAus(){
+  timer.alarm=false; clearInterval(timerAlarmTakt); timerAlarmTakt=null;
+  timerApp("loeschen");
+  if(timer.modus==="countdown" && timer.rest<=0) timer.rest=timer.dauer;
+  timerMerken(); timerNeuZeichnen();
+}
+function timerTakt(){
+  if(!timer.laeuft) return;
+  const a=document.getElementById("timer-anzeige");
+  const s=timerSekunden();
+  if(a) a.textContent=timerText(s);
+  if(timer.modus==="countdown" && s<=0) timerAlarmAn();
+}
+setInterval(timerTakt,250);
+
+// 🔐 ZUGANG: Anfrage neuer Betriebsleiter, Freigabe nur durch den Betreiber (Fritz)
+// Wer Betreiber ist, steht fest in der Datenbank (system/betreiber → Betrieb von Fritz). Alle Geräte dieses Betriebs
+// dürfen Anfragen freigeben oder ablehnen. Abgesichert durch die Security Rules – nicht nur hier im Browser.
+
+// Fassungen von AGB und Datenschutzerklärung. Bei einer neuen Fassung HIER und in agb.html / datenschutz.html ändern.
+const AGB_FASSUNG = "AGB-2026-10-06";
+const DATENSCHUTZ_FASSUNG = "Datenschutz-2026-10-06";
+
+function esc(s){
+  return String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
 
 function showRequestForm(){
   document.getElementById("accessBlock").style.display="flex";
 }
 
+// Ansicht auf der Zugangsseite: "formular" | "warten" | "abgelehnt"
+function zugangAnsicht(ansicht){
+  document.getElementById("zugang-formular").style.display = ansicht==="warten" ? "none" : "block";
+  document.getElementById("zugang-warten").style.display = ansicht==="warten" ? "block" : "none";
+  document.getElementById("zugang-abgelehnt").style.display = ansicht==="abgelehnt" ? "block" : "none";
+}
+
 async function anfrageSenden(){
-  let vorname = document.getElementById("vorname").value.trim();
-  let nachname = document.getElementById("nachname").value.trim();
-  let email = document.getElementById("email").value.trim();
-  let zustimmung = document.getElementById("zustimmung").checked;
+  const wert=id=>document.getElementById(id).value.trim();
+  const vorname=wert("vorname"), nachname=wert("nachname"), betriebsname=wert("betriebsname"), email=wert("email");
 
-  console.log("DEBUG:", vorname, nachname, email);
-
-  if(vorname === "" || nachname === "" || email === ""){
+  if(vorname==="" || nachname==="" || betriebsname==="" || email===""){
     alert("Bitte alles ausfüllen");
     return;
   }
-
-  if(!zustimmung){
-    alert("Bitte Zustimmung bestätigen");
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    alert("Bitte eine gültige E-Mail-Adresse eingeben");
+    return;
+  }
+  if(!document.getElementById("zustimmung-agb").checked){
+    alert("Bitte die AGB akzeptieren");
+    return;
+  }
+  if(!document.getElementById("zustimmung-datenschutz").checked){
+    alert("Bitte bestätigen, dass du die Datenschutzerklärung gelesen hast");
     return;
   }
 
-  // 🔥 speichern
-  const docRef = await db.collection("anfragen").add({
-    vorname, nachname, email,
-    status:"offen",
-    deviceID
-  });
+  const knopf=document.getElementById("anfrage-knopf");
+  knopf.disabled=true;
+  try{
+    // Gespeichert wird auch, WER (Gerät) WANN (Serverzeit) WELCHE Fassung bestätigt hat
+    const ref=await db.collection("anfragen").add({
+      vorname, nachname, betriebsname, email,
+      uid: geraeteUid,
+      alteGeraeteId: deviceID,
+      agbFassung: AGB_FASSUNG,
+      datenschutzFassung: DATENSCHUTZ_FASSUNG,
+      zeitpunkt: firebase.firestore.FieldValue.serverTimestamp(),
+      status: "offen"
+    });
 
-  // 🔗 Links erstellen (JETZT RICHTIG!)
-let approveLink = "https://taupke-pixel.github.io/Futterrechner/?approve=" + docRef.id;
-let denyLink = "https://taupke-pixel.github.io/Futterrechner/?deny=" + docRef.id;
+    // Links zeigen auf dieselbe Seite (echte Seite → echte Links, Test-Seite → Test-Links)
+    const basis=location.origin+location.pathname;
+    const zusatz=mitEmulator ? "&emulator=1" : "";
+    try{
+      await emailjs.send("service_6z9n3x9","template_e598pub",{
+        name: vorname+" "+nachname,
+        email: email,
+        betrieb: betriebsname,
+        agb_fassung: AGB_FASSUNG,
+        datenschutz_fassung: DATENSCHUTZ_FASSUNG,
+        approve_link: basis+"?approve="+ref.id+zusatz,
+        deny_link: basis+"?deny="+ref.id+zusatz
+      });
+    }catch(e){ console.log("E-Mail konnte nicht gesendet werden:", e); }
 
-  // 📧 Mail senden
-  emailjs.send("service_6z9n3x9", "template_e598pub", {
-    name: vorname+" "+nachname,
-    email: email,
-    approve_link: approveLink,
-    deny_link: denyLink
-  });
-
-  alert("Anfrage gesendet");
+    zugangAnsicht("warten");
+    beobachteEigeneAnfrage();
+  }catch(e){
+    console.log("Anfrage fehlgeschlagen:", e);
+    alert("Die Anfrage konnte nicht gesendet werden. Bitte mit Internet nochmal versuchen.");
+    knopf.disabled=false;
+  }
 }
 
-async function checkAccess(){
-  console.log("checkAccess startet");
-
-  try{
-    const doc = await db.collection("zugriffe").doc(deviceID).get();
-
-    if(!doc.exists || doc.data().status !== "erlaubt"){
-      console.log("kein Zugriff → Formular");
-      showRequestForm();
-      return false;
+// Eigene Anfrage beobachten: sobald Fritz freigibt, startet die App von selbst
+let anfrageAbo=null;
+function beobachteEigeneAnfrage(){
+  if(anfrageAbo) return;
+  anfrageAbo=db.collection("anfragen").where("uid","==",geraeteUid).onSnapshot(q=>{
+    const zeit=a=>a.zeitpunkt && a.zeitpunkt.toMillis ? a.zeitpunkt.toMillis() : Date.now();
+    const neueste=q.docs.map(d=>d.data()).sort((a,b)=>zeit(b)-zeit(a))[0];
+    if(!neueste){ zugangAnsicht("formular"); return; }
+    if(neueste.status==="erlaubt"){
+      anfrageAbo(); anfrageAbo=null;
+      location.reload();
+      return;
     }
+    zugangAnsicht(neueste.status==="offen" ? "warten" : "abgelehnt");
+  }, e=>console.log("Anfrage-Status:", e));
+}
 
-    console.log("Zugriff erlaubt");
+// ---------- Freigabe-Seite (Link aus der E-Mail an Fritz) ----------
+// Freigeben geht auf JEDEM Gerät: entweder ist es ein Gerät von Fritz' Betrieb, oder es wird die Betreiber-PIN eingegeben.
+// Auf dem Gerät gemerkt wird nur ein Nachweis (Prüfsumme), nie die PIN. Die Datenbank prüft ihn (Security Rules).
+const BETREIBER_MERKER = "betreiberNachweis";
+const ZUR_APP = `<p><button class="save-btn" onclick="location.href=location.origin+location.pathname">Zur App</button></p>`;
+const KEIN_NETZ = `<p><b>Keine Internetverbindung.</b></p><p>Bitte mit Internet den Link aus der E-Mail noch einmal öffnen.</p>`;
+
+function betreiberNachweis(pin){
+  return sha256hex("futterrechner-betreiber:"+pin);
+}
+
+// Firestore wartet ohne Netz endlos – nach einer Weile lieber eine klare Meldung zeigen
+function mitZeitlimit(versprechen, ms){
+  return Promise.race([versprechen, new Promise((_,nein)=>setTimeout(()=>nein({ code:"unavailable" }), ms))]);
+}
+
+function merkerLesen(){ try{ return localStorage.getItem(BETREIBER_MERKER); }catch(e){ return null; } }
+function merkerSetzen(w){ try{ if(w) localStorage.setItem(BETREIBER_MERKER,w); else localStorage.removeItem(BETREIBER_MERKER); }catch(e){} }
+
+// Anfrage lesen; fehlt die Berechtigung, Betreiber-PIN abfragen (gemerkten Nachweis zuerst probieren)
+async function anfrageMitBerechtigungLesen(id, inhalt){
+  let gemerktProbiert=false;
+  for(let versuch=0; versuch<6; versuch++){
+    try{
+      return await mitZeitlimit(db.collection("anfragen").doc(id).get({ source:"server" }), 15000);
+    }catch(e){
+      if(!e || e.code!=="permission-denied"){ inhalt.innerHTML=KEIN_NETZ+ZUR_APP; return null; }
+    }
+    // Keine Berechtigung → mit Betreiber-PIN freischalten
+    let nachweis=null, ausMerker=false;
+    if(!gemerktProbiert && merkerLesen()){ nachweis=merkerLesen(); ausMerker=true; gemerktProbiert=true; }
+    else{
+      inhalt.innerHTML=`<p>Zum Freigeben oder Ablehnen bitte die <b>Betreiber-PIN</b> eingeben.</p>`;
+      const pin=await pinDialog("Betreiber-PIN", "Bitte die Betreiber-PIN eingeben. Sie wird auf diesem Gerät gemerkt, damit du sie nur einmal eingeben musst.");
+      if(pin===null || pin===""){ inhalt.innerHTML=`<p>Abgebrochen.</p>`+ZUR_APP; return null; }
+      nachweis=await betreiberNachweis(pin);
+    }
+    try{
+      await mitZeitlimit(db.collection("betreiberFreischaltung").doc(geraeteUid).set({
+        nachweis, zeit: firebase.firestore.FieldValue.serverTimestamp()
+      }), 15000);
+      merkerSetzen(nachweis);
+    }catch(e){
+      if(e && e.code==="permission-denied"){
+        merkerSetzen(null);
+        if(!ausMerker) alert("Falsche Betreiber-PIN.");
+        continue;
+      }
+      inhalt.innerHTML=KEIN_NETZ+ZUR_APP;
+      return null;
+    }
+  }
+  inhalt.innerHTML=`<p><b>Keine Berechtigung.</b></p><p>Zu viele falsche Versuche.</p>`+ZUR_APP;
+  return null;
+}
+
+async function zeigeFreigabe(){
+  const id=approveID||denyID;
+  const block=document.getElementById("freigabeBlock");
+  const inhalt=document.getElementById("freigabe-inhalt");
+  block.style.display="flex";
+  if(!geraeteUid || !navigator.onLine){ inhalt.innerHTML=KEIN_NETZ+ZUR_APP; return; }
+
+  const s=await anfrageMitBerechtigungLesen(id, inhalt);
+  if(!s) return;
+  if(!s.exists){ inhalt.innerHTML="<p>Diese Anfrage gibt es nicht.</p>"+ZUR_APP; return; }
+  const a=s.data();
+
+  if(a.uid===geraeteUid){
+    inhalt.innerHTML=`<p><b>Keine Berechtigung.</b></p>
+      <p>Das ist deine eigene Anfrage. Freigeben kann nur der Betreiber. Status: <b>${esc(a.status)}</b></p>`+ZUR_APP;
+    return;
+  }
+
+  if(!a.uid){
+    inhalt.innerHTML=`<p>Das ist eine alte Anfrage (vor dem Umbau). Bitte ${esc(a.vorname)} ${esc(a.nachname)} bitten,
+      in der App neu anzufragen.</p>`+ZUR_APP;
+    return;
+  }
+
+  let warVorher="nein";
+  if(a.alteGeraeteId){
+    try{
+      const z=await db.collection("zugriffe").doc(a.alteGeraeteId).get();
+      if(z.exists && z.data().status==="erlaubt") warVorher="ja (altes System)";
+    }catch(e){}
+  }
+  const wann=a.zeitpunkt && a.zeitpunkt.toDate ? a.zeitpunkt.toDate().toLocaleString("de-DE") : "-";
+
+  let html=`
+    <table style="font-size:16px">
+      <tr><td>Name</td><td>${esc(a.vorname)} ${esc(a.nachname)}</td></tr>
+      <tr><td>Betrieb</td><td>${esc(a.betriebsname)}</td></tr>
+      <tr><td>E-Mail</td><td>${esc(a.email)}</td></tr>
+      <tr><td>Angefragt</td><td>${esc(wann)}</td></tr>
+      <tr><td>AGB</td><td>${esc(a.agbFassung)}</td></tr>
+      <tr><td>Datenschutz</td><td>${esc(a.datenschutzFassung)}</td></tr>
+      <tr><td>Früher schon Zugang</td><td>${warVorher}</td></tr>
+      <tr><td>Status</td><td><b>${esc(a.status)}</b></td></tr>
+    </table>`;
+
+  if(a.status!=="offen"){
+    inhalt.innerHTML=html+`<p>Diese Anfrage wurde bereits entschieden.</p>`+ZUR_APP;
+    return;
+  }
+
+  if(denyID){
+    html+=`<p><button class="save-btn" style="background:#c40000" onclick="anfrageAblehnen()">Ablehnen</button></p>`;
+  } else {
+    html+=`
+      <p><button class="save-btn" onclick="anfrageFreigeben(null)">Freigeben – neuer Betrieb „${esc(a.betriebsname)}“</button></p>
+      <details style="margin:10px 0">
+        <summary>Stattdessen zu einem bestehenden Betrieb hinzufügen (z. B. neues Handy)</summary>
+        <select id="freigabe-betrieb" style="width:100%;margin:8px 0;padding:8px"><option value="">lade…</option></select>
+        <button class="save-btn" onclick="anfrageFreigeben(document.getElementById('freigabe-betrieb').value)">Zu diesem Betrieb hinzufügen</button>
+      </details>
+      <p><button class="save-btn" style="background:#c40000" onclick="anfrageAblehnen()">Ablehnen</button></p>`;
+  }
+  inhalt.innerHTML=html+ZUR_APP;
+
+  if(!denyID){
+    db.collection("betriebe").get().then(q=>{
+      const sel=document.getElementById("freigabe-betrieb");
+      if(!sel) return;
+      sel.innerHTML=`<option value="">– Betrieb wählen –</option>`+q.docs
+        .map(d=>({id:d.id,name:d.data().name||d.id}))
+        .sort((x,y)=>x.name.localeCompare(y.name))
+        .map(b=>`<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
+    }).catch(e=>console.log(e));
+  }
+}
+
+async function anfrageFreigeben(zielBetrieb){
+  if(zielBetrieb===""){ alert("Bitte einen Betrieb wählen"); return; }
+  const inhalt=document.getElementById("freigabe-inhalt");
+  if(!navigator.onLine){ inhalt.innerHTML=KEIN_NETZ+ZUR_APP; return; }
+  try{
+    const s=await mitZeitlimit(db.collection("anfragen").doc(approveID).get({source:"server"}), 15000);
+    const a=s.data();
+    const FV=firebase.firestore.FieldValue;
+    const betriebRef = zielBetrieb ? db.collection("betriebe").doc(zielBetrieb) : db.collection("betriebe").doc();
+    const b=db.batch();
+    if(!zielBetrieb)
+      b.set(betriebRef,{ name:a.betriebsname, angelegt:FV.serverTimestamp(), anfrageId:approveID });
+    b.set(betriebRef.collection("geraete").doc(a.uid),{ name:"Gerät von "+a.vorname, seit:FV.serverTimestamp(), anfrageId:approveID });
+    b.set(db.collection("geraetezuordnung").doc(a.uid),{ betriebId:betriebRef.id });
+    b.update(db.collection("anfragen").doc(approveID),{ status:"erlaubt", betriebId:betriebRef.id, entschieden:FV.serverTimestamp() });
+    b.set(db.collection("approvals").doc(approveID),{ aktion:"approve", zeit:FV.serverTimestamp(), geraet:geraeteUid });
+    await mitZeitlimit(b.commit(), 20000);
+    inhalt.innerHTML=`<p>✅ <b>${esc(a.vorname)} ${esc(a.nachname)} wurde freigegeben.</b></p>
+      <p>Der Futterrechner auf dem Gerät von ${esc(a.vorname)} startet von selbst.</p>`+ZUR_APP;
+  }catch(e){
+    console.log("Freigabe fehlgeschlagen:", e);
+    if(e && e.code==="unavailable") inhalt.innerHTML=KEIN_NETZ+ZUR_APP;
+    else alert("Freigabe fehlgeschlagen. Ist das Gerät schon in einem Betrieb, oder ist die Betreiber-PIN abgelaufen (Seite neu öffnen)?");
+  }
+}
+
+async function anfrageAblehnen(){
+  if(!confirm("Anfrage wirklich ablehnen?")) return;
+  const id=approveID||denyID;
+  const inhalt=document.getElementById("freigabe-inhalt");
+  if(!navigator.onLine){ inhalt.innerHTML=KEIN_NETZ+ZUR_APP; return; }
+  try{
+    const s=await mitZeitlimit(db.collection("anfragen").doc(id).get({source:"server"}), 15000);
+    const a=s.data()||{};
+    const FV=firebase.firestore.FieldValue;
+    const b=db.batch();
+    b.update(db.collection("anfragen").doc(id),{ status:"abgelehnt", entschieden:FV.serverTimestamp() });
+    b.set(db.collection("approvals").doc(id),{ aktion:"deny", zeit:FV.serverTimestamp(), geraet:geraeteUid });
+    await mitZeitlimit(b.commit(), 20000);
+    inhalt.innerHTML=`<p><b>${esc(a.vorname)} ${esc(a.nachname)} wurde abgelehnt.</b></p>`+ZUR_APP;
+  }catch(e){
+    console.log(e);
+    if(e && e.code==="unavailable") inhalt.innerHTML=KEIN_NETZ+ZUR_APP;
+    else alert("Ablehnen fehlgeschlagen (Berechtigung? Seite neu öffnen)");
+  }
+}
+
+// Betreiber-PIN festlegen oder ändern (nur auf Fritz' Geräten sichtbar; mindestens 8 Ziffern)
+async function betreiberPinFestlegen(){
+  const p1=await pinDialog("Betreiber-PIN festlegen",
+    "Mit dieser PIN kannst du Freigabe-Links auf jedem Gerät bestätigen (PC, Tablet, Gmail). Mindestens 8 Ziffern.");
+  if(p1===null) return;
+  if(!/^[0-9]{8,20}$/.test(p1)){ alert("Bitte 8 bis 20 Ziffern eingeben."); return; }
+  const p2=await pinDialog("PIN wiederholen", "Bitte dieselbe PIN noch einmal eingeben.");
+  if(p2!==p1){ alert("Die beiden PINs stimmen nicht überein."); return; }
+  try{
+    const nachweis=await betreiberNachweis(p1);
+    await mitZeitlimit(db.collection("config").doc("admin").set({
+      pruefwert: await sha256hex(nachweis), gesetzt: firebase.firestore.FieldValue.serverTimestamp()
+    }), 15000);
+    merkerSetzen(nachweis);
+    alert("Betreiber-PIN gespeichert. Bitte gut merken – damit gibst du neue Betriebe frei.");
+  }catch(e){
+    console.log(e);
+    alert(e && e.code==="unavailable" ? "Keine Internetverbindung." : "Speichern nicht erlaubt (nur auf deinem Betreiber-Gerät).");
+  }
+}
+
+// Ist dieses Gerät ein Betreiber-Gerät? (Nur der Betreiber darf die Liste der Betriebe sehen.)
+async function istBetreiberGeraetHier(){
+  try{ await db.collection("betriebe").limit(1).get({ source:"server" }); return true; }
+  catch(e){ return false; }
+}
+
+// 📱 GERÄTE: weitere Geräte per PIN oder QR-Code hinzufügen, Geräte entfernen
+// Ein vorhandenes Gerät erzeugt eine Einladung (einladungen/{code}), ca. 10 Minuten gültig, nur einmal nutzbar.
+// Das neue Gerät trägt sich mit dem Code selbst ein und löscht die Einladung im selben Schritt.
+// Gültigkeit und Einmaligkeit prüfen die Security Rules mit der Serverzeit (nicht die Uhr am Handy).
+const EINLADUNG_MINUTEN = 10;
+// Test-Webseite → Test-App (lädt die Test-Datenbank), sonst die echte App
+const APP_PAKET = istTestSeite ? "de.stallultra.futterrechner.test" : "de.stallultra.futterrechner";
+const inApp = /FutterrechnerApp/.test(navigator.userAgent);
+const istAndroid = /Android/i.test(navigator.userAgent);
+const einladungsCode = urlParams.get("einladung");
+
+let aktiveEinladung = null;   // { pin, qr, bis, timer }
+
+function zufall(zeichen, laenge){
+  const z=new Uint32Array(laenge);
+  crypto.getRandomValues(z);
+  return Array.from(z, x=>zeichen[x % zeichen.length]).join("");
+}
+
+function seitenAdresse(){
+  return location.origin+location.pathname;
+}
+
+function geraetStandardName(){
+  const ua=navigator.userAgent;
+  if(/Android/i.test(ua)) return "Android-Handy";
+  if(/iPhone|iPad/i.test(ua)) return "iPhone";
+  if(/Windows/i.test(ua)) return "Windows-PC";
+  if(/Mac/i.test(ua)) return "Mac";
+  return "Gerät";
+}
+
+// ---------- Vorhandenes Gerät: Einladung erzeugen ----------
+async function einladungErzeugen(){
+  // Geräte hinzufügen nur mit Verwaltungs-PIN
+  if(!(await verwaltungFreischalten())) return;
+  const knopf=document.getElementById("einladen-knopf");
+  if(knopf) knopf.disabled=true;
+  try{
+    const FV=firebase.firestore.FieldValue;
+    const name=(document.getElementById("betrieb-name")||{}).textContent||"";
+    const basis={ betriebId, betriebName:name.slice(0,100), von:geraeteUid, erstellt:FV.serverTimestamp() };
+    const qr=zufall("ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789",40);
+    let pin=null;
+    for(let versuch=0; versuch<5 && !pin; versuch++){
+      const p=zufall("0123456789",8);
+      try{
+        await db.collection("einladungen").doc(p).set({...basis, art:"pin"});
+        pin=p;
+      }catch(e){ if(e.code!=="permission-denied") throw e; }   // PIN schon vergeben → neue
+    }
+    if(!pin) throw new Error("Keine freie PIN gefunden");
+    await db.collection("einladungen").doc(qr).set({...basis, art:"qr"});
+    if(aktiveEinladung) einladungBeenden(false);
+    aktiveEinladung={ pin, qr, bis:Date.now()+EINLADUNG_MINUTEN*60000 };
+    zeigeEinladung();
+    aktiveEinladung.timer=setInterval(zeigeEinladungRestzeit,1000);
+  }catch(e){
+    console.log("Einladung fehlgeschlagen:", e);
+    alert("Einladung konnte nicht erstellt werden. Ist Internet da?");
+  }finally{
+    if(knopf) knopf.disabled=false;
+  }
+}
+
+function zeigeEinladung(){
+  const el=document.getElementById("einladung-anzeige");
+  if(!el || !aktiveEinladung) return;
+  const link=seitenAdresse()+"?einladung="+aktiveEinladung.qr;
+  let qrSvg="";
+  try{
+    const q=qrcode(0,"M");
+    q.addData(link);
+    q.make();
+    qrSvg=q.createSvgTag({ cellSize:5, margin:2, scalable:true });
+  }catch(e){ qrSvg="<p>QR-Code nicht verfügbar – bitte die PIN benutzen.</p>"; }
+  el.innerHTML=`
+    <div style="background:#eef6ee;padding:12px;border-radius:10px;text-align:center">
+      <b>Neues Gerät hinzufügen</b>
+      <p style="margin:6px 0">Mit dem neuen Gerät den QR-Code scannen<br>– oder dort „Ich habe eine PIN“ wählen und eingeben:</p>
+      <div id="einladung-qr" style="max-width:240px;margin:auto">${qrSvg}</div>
+      <div style="font-size:30px;letter-spacing:4px;font-weight:bold;margin:8px 0" id="einladung-pin">${aktiveEinladung.pin.slice(0,4)} ${aktiveEinladung.pin.slice(4)}</div>
+      <div id="einladung-rest" style="color:#555"></div>
+      <div style="margin-top:10px;font-size:13px">Oder diesen Link schicken (z. B. per WhatsApp):</div>
+      <div id="einladung-link" style="font-size:12px;word-break:break-all;background:#fff;padding:6px;border-radius:6px;margin:4px 0">${esc(link)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center">
+        <button class="save-btn" style="margin:0" onclick="linkTeilen(einladungsLink(),'Einladung zum Futterrechner (10 Minuten gültig, nur einmal nutzbar)')">📤 Teilen</button>
+        <a class="save-btn" style="margin:0;text-decoration:none;background:#25d366" target="_blank" rel="noopener"
+           href="https://wa.me/?text=${encodeURIComponent('Einladung zum Futterrechner (10 Minuten gültig, nur einmal nutzbar): '+link)}">WhatsApp</a>
+        <button class="save-btn" style="margin:0;background:#2f80ed" onclick="linkKopieren(einladungsLink())">Kopieren</button>
+      </div>
+      <button class="save-btn" style="background:#888;margin-top:8px" onclick="einladungBeenden(true)">Abbrechen</button>
+    </div>`;
+  zeigeEinladungRestzeit();
+}
+
+function einladungsLink(){
+  return aktiveEinladung ? seitenAdresse()+"?einladung="+aktiveEinladung.qr : "";
+}
+
+// Link über das Teilen-Menü des Handys verschicken (WhatsApp, SMS, E-Mail …); sonst kopieren
+async function linkTeilen(link, text){
+  if(!link) return;
+  // In der Android-App: Android-Teilen-Menü
+  if(window.FutterrechnerApp && window.FutterrechnerApp.teilen){
+    window.FutterrechnerApp.teilen(text+": "+link);
+    return;
+  }
+  if(navigator.share){
+    try{ await navigator.share({ title:"Futterrechner", text, url:link }); return; }
+    catch(e){ if(e && e.name==="AbortError") return; }
+  }
+  linkKopieren(link);
+}
+
+async function linkKopieren(link){
+  if(!link) return;
+  try{
+    await navigator.clipboard.writeText(link);
+    alert("Link kopiert. Du kannst ihn jetzt z. B. in WhatsApp einfügen.");
+  }catch(e){
+    prompt("Link zum Kopieren:", link);
+  }
+}
+
+function appLink(){
+  return seitenAdresse()+"download.html";
+}
+
+function zeigeEinladungRestzeit(){
+  if(!aktiveEinladung) return;
+  const rest=Math.max(0,Math.round((aktiveEinladung.bis-Date.now())/1000));
+  const el=document.getElementById("einladung-rest");
+  if(el) el.textContent=`noch ${Math.floor(rest/60)}:${String(rest%60).padStart(2,"0")} min gültig, nur einmal nutzbar`;
+  if(rest<=0) einladungBeenden(true);
+}
+
+// Einladung zurückziehen (abgelaufen oder abgebrochen)
+function einladungBeenden(loeschen){
+  if(!aktiveEinladung) return;
+  clearInterval(aktiveEinladung.timer);
+  if(loeschen){
+    [aktiveEinladung.pin, aktiveEinladung.qr].forEach(c=>db.collection("einladungen").doc(c).delete().catch(()=>{}));
+  }
+  aktiveEinladung=null;
+  const el=document.getElementById("einladung-anzeige");
+  if(el) el.innerHTML="";
+}
+
+// Abgelaufene Einladungen des Betriebs aufräumen
+function einladungenAufraeumen(){
+  db.collection("einladungen").where("betriebId","==",betriebId).get().then(q=>{
+    q.docs.forEach(d=>{
+      const t=d.data().erstellt;
+      const alter=t && t.toMillis ? Date.now()-t.toMillis() : 0;
+      if(alter>EINLADUNG_MINUTEN*60000 && !(aktiveEinladung && [aktiveEinladung.pin,aktiveEinladung.qr].includes(d.id)))
+        d.ref.delete().catch(()=>{});
+    });
+  }).catch(()=>{});
+}
+
+// ---------- Geräteliste ----------
+let geraeteAbo=null;
+function baueGeraeteListe(){
+  const el=document.getElementById("geraete-liste");
+  if(!el || !betriebId) return;
+  if(geraeteAbo) geraeteAbo();
+  geraeteAbo=db.collection("betriebe").doc(betriebId).collection("geraete").onSnapshot(q=>{
+    const liste=document.getElementById("geraete-liste");
+    if(!liste) return;
+    const geraete=q.docs.map(d=>({ uid:d.id, ...d.data() }))
+      .sort((a,b)=>((a.seit&&a.seit.toMillis&&a.seit.toMillis())||0)-((b.seit&&b.seit.toMillis&&b.seit.toMillis())||0));
+    liste.innerHTML=geraete.map(g=>{
+      const ich=g.uid===geraeteUid;
+      const seit=g.seit && g.seit.toDate ? g.seit.toDate().toLocaleDateString("de-DE") : "";
+      return `<div class="history-item" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div><b>${esc(g.name)}</b>${ich?" <span style='color:#27ae60'>(dieses Gerät)</span>":""}<br>
+          <span style="font-size:12px;color:#666">seit ${esc(seit)}</span></div>
+        <div style="white-space:nowrap">
+          <button class="sort-btn" onclick="geraetUmbenennen('${esc(g.uid)}')">✎</button>
+          <button class="sort-btn" style="background:#f3c4c4" onclick="geraetEntfernen('${esc(g.uid)}')">Entfernen</button>
+        </div></div>`;
+    }).join("");
+    cloud.anzahlGeraete=geraete.length;
+  }, e=>console.log("Geräteliste:", e));
+}
+
+async function geraetUmbenennen(uid){
+  const doc=db.collection("betriebe").doc(betriebId).collection("geraete").doc(uid);
+  const alt=(await doc.get()).data();
+  const name=prompt("Name des Geräts:", alt ? alt.name : "");
+  if(!name || !name.trim()) return;
+  await doc.update({ name:name.trim().slice(0,60) }).catch(e=>alert("Ändern fehlgeschlagen"));
+}
+
+async function geraetEntfernen(uid){
+  const ich=uid===geraeteUid;
+  let frage = ich
+    ? "Dieses Gerät aus dem Betrieb abmelden?\nDie Daten bleiben im Betrieb, aber dieses Gerät hat danach keinen Zugriff mehr."
+    : "Dieses Gerät aus dem Betrieb entfernen?\nEs verliert sofort den Zugriff.";
+  if(ich && cloud.anzahlGeraete<=1)
+    frage="ACHTUNG: Das ist das letzte Gerät des Betriebs!\nDanach kommt niemand mehr an die Daten, außer der Betreiber fügt über eine neue Anfrage wieder ein Gerät hinzu.\n\nTrotzdem abmelden?";
+  if(!confirm(frage)) return;
+  // Andere Geräte entfernen nur mit Verwaltungs-PIN (sich selbst abmelden geht ohne)
+  if(!ich && !(await verwaltungFreischalten())) return;
+  try{
+    if(ich) await cloudSyncFertig();
+    const b=db.batch();
+    b.delete(db.collection("betriebe").doc(betriebId).collection("geraete").doc(uid));
+    b.delete(db.collection("geraetezuordnung").doc(uid));
+    await b.commit();
+    if(ich) geraetEntfernt();
+  }catch(e){
+    console.log(e);
+    alert("Entfernen fehlgeschlagen (Internet?)");
+  }
+}
+
+// ---------- Verwaltungs-PIN des Betriebs ----------
+// Der Betriebsleiter legt sie am Anfang fest. Geräte hinzufügen/entfernen geht von jedem Gerät, aber nur mit dieser PIN.
+// Die App schickt nur einen Nachweis (Prüfsumme), die Datenbank vergleicht ihn – die PIN selbst wird nirgends gespeichert.
+let freischaltungBis = 0;
+
+async function sha256hex(text){
+  const b=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+
+function pinNachweis(pin){
+  return sha256hex("futterrechner:"+betriebId+":"+pin);
+}
+
+// Kleines Eingabefenster mit verdeckter PIN. Liefert die PIN oder null (Abbrechen).
+function pinDialog(titel, text){
+  return new Promise(fertig=>{
+    const d=document.getElementById("pinDialog");
+    document.getElementById("pinDialog-titel").textContent=titel;
+    document.getElementById("pinDialog-text").textContent=text;
+    const feld=document.getElementById("pinDialog-feld");
+    feld.value="";
+    d.style.display="flex";
+    setTimeout(()=>feld.focus(),50);
+    const ende=wert=>{
+      d.style.display="none";
+      document.getElementById("pinDialog-ok").onclick=null;
+      document.getElementById("pinDialog-abbrechen").onclick=null;
+      feld.onkeydown=null;
+      fertig(wert);
+    };
+    document.getElementById("pinDialog-ok").onclick=()=>ende(feld.value.trim());
+    document.getElementById("pinDialog-abbrechen").onclick=()=>ende(null);
+    feld.onkeydown=e=>{ if(e.key==="Enter") ende(feld.value.trim()); };
+  });
+}
+
+async function verwaltungsPinGesetzt(){
+  try{
+    const s=await db.collection("betriebe").doc(betriebId).get({source:"server"});
+    return !!(s.exists && s.data().verwaltungsPinGesetzt);
+  }catch(e){
+    const s=await db.collection("betriebe").doc(betriebId).get().catch(()=>null);
+    return !!(s && s.exists && s.data().verwaltungsPinGesetzt);
+  }
+}
+
+// PIN abfragen und bei der Datenbank freischalten lassen (gilt ca. 10 Minuten)
+async function verwaltungFreischalten(){
+  if(Date.now()<freischaltungBis) return true;
+  if(!(await verwaltungsPinGesetzt())){
+    alert("Für diesen Betrieb ist noch keine Verwaltungs-PIN festgelegt.\nDer Betriebsleiter legt sie jetzt einmalig fest.");
+    return await verwaltungsPinFestlegen(false);
+  }
+  const pin=await pinDialog("Verwaltungs-PIN", "Zum Hinzufügen oder Entfernen von Geräten bitte die Verwaltungs-PIN des Betriebs eingeben.");
+  if(pin===null || pin==="") return false;
+  return await freischaltungSenden(pin);
+}
+
+async function freischaltungSenden(pin){
+  try{
+    await db.collection("betriebe").doc(betriebId).collection("freischaltung").doc(geraeteUid).set({
+      nachweis: await pinNachweis(pin),
+      zeit: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    freischaltungBis=Date.now()+9*60000;
     return true;
-
-  } catch(e){
-    console.log("FEHLER:", e);
-    showRequestForm();
+  }catch(e){
+    console.log("Freischaltung:", e);
+    alert(e && e.code==="permission-denied" ? "Falsche Verwaltungs-PIN." : "Keine Verbindung – bitte mit Internet nochmal versuchen.");
     return false;
   }
 }
 
-/* START */
-async function handleApproval(){
-  console.log("APPROVE ID:", approveID);
-
-  if(approveID){
-    console.log("Freigabe erkannt");
-
-    await db.collection("anfragen").doc(approveID).update({
-      status: "erlaubt"
-    });
-
-    const req = await db.collection("anfragen").doc(approveID).get();
-    const devID = req.data().deviceID;
-
-    await db.collection("zugriffe").doc(devID).set({
-      status: "erlaubt"
-    });
-
-    alert("Zugriff erlaubt!");
-
-    window.location.href = "https://taupke-pixel.github.io/Futterrechner/";
+// PIN festlegen (am Anfang) oder ändern (nur mit der alten PIN)
+async function verwaltungsPinFestlegen(aendern){
+  if(aendern){
+    freischaltungBis=0;
+    if(!(await verwaltungFreischalten())) return false;
   }
+  const p1=await pinDialog(aendern ? "Neue Verwaltungs-PIN" : "Verwaltungs-PIN festlegen",
+    "Nur der Betriebsleiter sollte sie kennen. 6 bis 12 Ziffern.");
+  if(p1===null) return false;
+  if(!/^[0-9]{6,12}$/.test(p1)){ alert("Bitte 6 bis 12 Ziffern eingeben."); return false; }
+  const p2=await pinDialog("PIN wiederholen", "Bitte dieselbe PIN noch einmal eingeben.");
+  if(p2!==p1){ alert("Die beiden PINs stimmen nicht überein."); return false; }
+  try{
+    const ref=db.collection("betriebe").doc(betriebId);
+    const FV=firebase.firestore.FieldValue;
+    const b=db.batch();
+    b.set(ref.collection("geheim").doc("verwaltung"),{ pruefwert: await sha256hex(await pinNachweis(p1)), gesetzt: FV.serverTimestamp() });
+    b.update(ref,{ verwaltungsPinGesetzt:true });
+    await b.commit();
+  }catch(e){
+    console.log("PIN festlegen:", e);
+    alert(e && e.code==="permission-denied"
+      ? "Für diesen Betrieb gibt es schon eine Verwaltungs-PIN. Bitte die vorhandene PIN benutzen."
+      : "Keine Verbindung – bitte mit Internet nochmal versuchen.");
+    return false;
+  }
+  alert("Verwaltungs-PIN gespeichert. Bitte gut merken – ohne sie kann niemand Geräte hinzufügen oder entfernen.");
+  baueBetriebBereich();
+  return await freischaltungSenden(p1);
+}
 
-  if(denyID){
-    await db.collection("anfragen").doc(denyID).update({
-      status: "abgelehnt"
-    });
+// ---------- Neues Gerät: mit PIN oder QR-Code beitreten ----------
+function pinBereichZeigen(){
+  document.getElementById("zugang-pin").style.display="block";
+  document.getElementById("pin-eingabe").focus();
+}
 
-    alert("Zugriff abgelehnt!");
+async function pinEinloesen(){
+  const pin=document.getElementById("pin-eingabe").value.replace(/\D/g,"");
+  if(pin.length!==8){ alert("Die PIN hat 8 Ziffern"); return; }
+  await einladungEinloesen(pin, document.getElementById("pin-geraetename").value);
+}
 
-    window.location.href = "https://taupke-pixel.github.io/Futterrechner/";
+async function einladungEinloesen(code, name){
+  name=(name||"").trim().slice(0,60) || geraetStandardName();
+  try{
+    const z=await db.collection("geraetezuordnung").doc(geraeteUid).get();
+    if(z.exists){ alert("Dieses Gerät gehört schon zu einem Betrieb. Erst dort abmelden (Einstellungen → Betrieb)."); return false; }
+    const e=await db.collection("einladungen").doc(code).get({source:"server"});
+    if(!e.exists){ alert("Diese PIN bzw. dieser QR-Code ist ungültig oder wurde schon benutzt."); return false; }
+    const d=e.data();
+    const FV=firebase.firestore.FieldValue;
+    const b=db.batch();
+    b.set(db.collection("betriebe").doc(d.betriebId).collection("geraete").doc(geraeteUid),{ name, seit:FV.serverTimestamp(), einladung:code });
+    b.set(db.collection("geraetezuordnung").doc(geraeteUid),{ betriebId:d.betriebId });
+    b.delete(e.ref);
+    await b.commit();
+    // Einladung aus der Adresse entfernen und App starten
+    location.replace(seitenAdresse()+(mitEmulator?"?emulator=1":"")+(istTestversion && istLokal ? (mitEmulator?"&":"?")+"testversion=1" : ""));
+    return true;
+  }catch(err){
+    console.log("Einlösen fehlgeschlagen:", err);
+    alert(err && err.code==="permission-denied"
+      ? "Diese PIN bzw. dieser QR-Code ist abgelaufen (gültig 10 Minuten). Bitte auf dem anderen Gerät eine neue erzeugen."
+      : "Hat nicht geklappt. Ist Internet da?");
+    return false;
   }
 }
 
-  handleApproval().then(()=>{
-  checkAccess().then(ok=>{
-    if(ok){
-      
-      buildCalc();
-      buildSettings();
-      buildCalc2();
-    buildHistory();
-      updateHistoryTabColor();
-    }
+// Seite wurde über einen QR-Code geöffnet (?einladung=…)
+async function zeigeEinladungsSeite(){
+  const block=document.getElementById("einladungBlock");
+  const inhalt=document.getElementById("einladung-inhalt");
+  block.style.display="flex";
+  let d=null;
+  try{
+    const e=await db.collection("einladungen").doc(einladungsCode).get({source:"server"});
+    if(e.exists) d=e.data();
+  }catch(err){ console.log(err); }
+  if(!d){
+    inhalt.innerHTML=`<p>Dieser QR-Code ist ungültig, abgelaufen oder wurde schon benutzt.</p>
+      <p>Bitte auf dem anderen Gerät unter Einstellungen → Betrieb → „Gerät hinzufügen“ einen neuen erzeugen.</p>
+      <p><button class="save-btn" onclick="location.replace(seitenAdresse())">Zur App</button></p>`;
+    return;
+  }
+  const appLink=`intent://einladung?code=${encodeURIComponent(einladungsCode)}#Intent;scheme=futterrechner;package=${APP_PAKET};`+
+    `S.browser_fallback_url=${encodeURIComponent(seitenAdresse()+"download.html?einladung="+einladungsCode)};end`;
+  inhalt.innerHTML=`
+    <p>Einladung zum Betrieb <b>${esc(d.betriebName||"")}</b>.</p>
+    ${istAndroid && !inApp ? `
+      <p><a class="save-btn" style="display:inline-block;text-decoration:none;padding:12px 18px" href="${appLink}">In der App öffnen</a></p>
+      <p style="font-size:13px;color:#555">Ist die App noch nicht installiert, kommst du automatisch zur Download-Seite.</p>
+      <hr><p style="font-size:13px">Oder ohne App hier im Browser benutzen:</p>` : ""}
+    <p>Name dieses Geräts:<br><input id="einladung-geraetename" value="${esc(geraetStandardName())}" style="padding:8px;width:90%"></p>
+    <p><button class="save-btn" id="einladung-knopf" onclick="einladungAusSeite()">${istAndroid && !inApp ? "Im Browser beitreten" : "Diesem Betrieb beitreten"}</button></p>`;
+}
+
+async function einladungAusSeite(){
+  const k=document.getElementById("einladung-knopf");
+  k.disabled=true;
+  const ok=await einladungEinloesen(einladungsCode, document.getElementById("einladung-geraetename").value);
+  if(!ok) k.disabled=false;
+}
+
+/* === ☁️ CLOUD-SPEICHER: Daten des Betriebs in Firestore ===
+   Rechnen und Anzeigen bleiben unverändert. Die Speicherfunktionen (save, saveGlobal, saveHistoryStorage,
+   saveLagerStorage, saveLieferungen) schreiben wie bisher in den localStorage und melden die Änderung hier an.
+   Von hier geht sie gebündelt in den Betrieb:
+     betriebe/{betriebId}/daten/futter | einstellungen | lager
+     betriebe/{betriebId}/history/{JJJJ-MM}      je Monat ein Dokument mit allen Tageseinträgen
+     betriebe/{betriebId}/lieferungen/{JJJJ-MM}  je Monat ein Dokument mit allen Lieferungen
+   Änderungen anderer Geräte kommen über onSnapshot herein und werden angezeigt.
+   Nur auf diesem Gerät bleiben: hiddenWarnings, historyCollapsed, Taschenrechner (calcHist). */
+
+let betriebId = localStorage.getItem("betriebId") || null;
+let geraeteUid = null;
+
+const cloud = {
+  aktiv:false,                 // true, sobald die Daten des Betriebs geladen sind
+  offen:{},                    // geänderte Bereiche, die noch nicht an Firestore übergeben wurden
+  timer:null,
+  schreibtGerade:false,
+  stand:{                      // zuletzt bekannter Stand in der Cloud
+    history:new Map(),         // Eintrags-ID → { s: Sortierwert, monat, obj: gespeicherter Eintrag }
+    lieferungen:new Map(),
+    lager:null
+  },
+  abos:[],
+  wartetAufBlur:false,
+  // F12: Lagerbestand je Gerät als SUMME aller eigenen Änderungen (wird absolut geschickt → doppelt ankommen schadet nicht;
+  // sofort im Gerät gemerkt → geht beim Schließen der App nicht verloren und wird beim nächsten Öffnen nachgeschickt)
+  lagerEigene:null,            // { agf: Summe, mlf: Summe, … } dieses Geräts
+  lagerGebucht:{},             // Bestand, der seit dem letzten bekannten Cloud-Stand schon in lagerEigene gebucht ist
+  eilig:false                  // History/Lieferungen sofort schicken (nicht 0,4 s sammeln)
+};
+
+function kopie(o){ return o===undefined ? null : JSON.parse(JSON.stringify(o)); }
+
+function cloudSpeichern(art){
+  if(!cloud.aktiv) return;
+  // Testversion (Spiegel): nichts in den Betrieb schicken – die Änderung bleibt nur hier, bis neue echte Daten kommen
+  if(istTestversion){ testversionHinweis(); return; }
+  cloud.offen[art]=true;
+  if(art==="lager") lagerBuchen();
+  if(art==="history" || art==="lieferungen") cloud.eilig=true;
+  clearTimeout(cloud.timer);
+  cloud.timer=setTimeout(cloudSchreiben, cloud.eilig ? 0 : 400);
+  zeigeSyncStatus();
+}
+
+// F12: Bestandsänderung sofort in die eigene Summe dieses Geräts buchen und im Gerät merken
+function lagerBuchen(){
+  const neu=lagerData||{}, alt=cloud.stand.lager||{};
+  cloud.lagerEigene=cloud.lagerEigene||{};
+  Object.keys(neu).forEach(p=>{
+    const n=neu[p];
+    if(!n || typeof n.bestand!=="number") return;
+    const vorher = (p in cloud.lagerGebucht) ? cloud.lagerGebucht[p] : ((alt[p] && typeof alt[p].bestand==="number") ? alt[p].bestand : 0);
+    const delta=n.bestand-vorher;
+    if(delta!==0) cloud.lagerEigene[p]=(cloud.lagerEigene[p]||0)+delta;
+    cloud.lagerGebucht[p]=n.bestand;
   });
-});
-  
+  lagerEigeneMerken();
+}
+function lagerEigeneMerken(){
+  try{ localStorage.setItem("lagerEigene", JSON.stringify({ betrieb:betriebId, geraet:geraeteUid, werte:cloud.lagerEigene||{} })); }catch(e){}
+}
+function lagerEigeneAusGeraet(){
+  try{
+    const g=JSON.parse(localStorage.getItem("lagerEigene")||"null");
+    return (g && g.betrieb===betriebId && g.geraet===geraeteUid && g.werte) ? g.werte : null;
+  }catch(e){ return null; }
+}
+// Gesamtbestand = Grundbestand im Dokument + Summen aller Geräte (für dieses Gerät gilt die eigene, im Gerät gemerkte Summe)
+function lagerZusammen(inhalt, buchungen){
+  const neu=kopie(inhalt)||{};
+  const alle={...(buchungen||{})};
+  alle[geraeteUid]=cloud.lagerEigene||{};
+  Object.values(alle).forEach(b=>Object.keys(b||{}).forEach(p=>{
+    if(neu[p] && typeof neu[p].bestand==="number" && typeof b[p]==="number") neu[p].bestand+=b[p];
+  }));
+  return neu;
+}
+
+// Monat eines Eintrags ("TT.MM.JJJJ" → "JJJJ-MM") = Dokument, in dem er gespeichert wird
+function monatVon(e){
+  const d = e && typeof e.datum==="string" ? e.datum.split(".") : [];
+  return (d.length===3 && /^\d{4}$/.test(d[2]) && /^\d{2}$/.test(d[1])) ? d[2]+"-"+d[1] : "ohne-datum";
+}
+
+// Eindeutige ID für einen History-/Lieferungs-Eintrag
+function eintragDokIds(liste){
+  const ids=[];
+  const vergeben=new Set();
+  liste.forEach(e=>{
+    let id = (e && e.id!==undefined && e.id!==null) ? String(e.id) : "";
+    if(!/^[A-Za-z0-9_-]{1,120}$/.test(id)){
+      let h=0; const s=JSON.stringify(e);
+      for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; }
+      id="x"+(h>>>0).toString(36);
+    }
+    let eindeutig=id, n=2;
+    while(vergeben.has(eindeutig)) eindeutig=id+"_"+(n++);
+    vergeben.add(eindeutig);
+    ids.push(eindeutig);
+  });
+  return ids;
+}
+
+// Lokale Änderungen in den Betrieb schreiben
+function cloudSchreiben(){
+  clearTimeout(cloud.timer);
+  if(!cloud.aktiv || !betriebId || istTestversion) return;
+  cloud.eilig=false;
+  const offen=cloud.offen;
+  cloud.offen={};
+  const ref=db.collection("betriebe").doc(betriebId);
+  const FV=firebase.firestore.FieldValue;
+  const kopf={ geaendert:FV.serverTimestamp(), von:geraeteUid };
+  const ops=[];
+
+  if(offen.futter)
+    ops.push(b=>b.set(ref.collection("daten").doc("futter"), {...kopf, inhalt:kopie(data)}));
+
+  if(offen.einstellungen)
+    ops.push(b=>b.set(ref.collection("daten").doc("einstellungen"), {...kopf, inhalt:kopie(globalCfg)}));
+
+  if(offen.lager){
+    const lagerDok=ref.collection("daten").doc("lager");
+    const neu=kopie(lagerData)||{};
+    const alt=cloud.stand.lager||{};   // gibt es noch kein Lager in der Cloud, zählt der Bestand dort als 0
+    // Bestand: jedes Gerät schickt die Summe seiner eigenen Änderungen (buchungen.{Gerät}) – so gehen gleichzeitige
+    // Änderungen mehrerer Geräte nicht verloren, und ein doppelt ankommendes Paket zählt nicht doppelt (F12)
+    const inhalt={};
+    new Set([...Object.keys(neu),...Object.keys(alt)]).forEach(p=>{
+      if(!(p in neu)){ inhalt[p]=FV.delete(); return; }
+      const n=neu[p], a=alt[p]||{};
+      if(!n || typeof n!=="object"){ inhalt[p]=n; return; }
+      const w={};
+      new Set([...Object.keys(n),...Object.keys(a)]).forEach(k=>{
+        if(!(k in n)) w[k]=FV.delete();
+        else if(k==="bestand" && typeof n[k]==="number" && (typeof a[k]==="number" || !(k in a))){
+          if(!(k in a)) w[k]=FV.increment(0);   // Grundbestand anlegen, falls es ihn noch nicht gibt (vorhandenen nie überschreiben)
+        }
+        else if(JSON.stringify(n[k])!==JSON.stringify(a[k])) w[k]=n[k];
+      });
+      // Nur geänderte Produkte schicken – ein leeres {} würde beim Zusammenführen das ganze Produkt leeren
+      if(Object.keys(w).length) inhalt[p]=w;
+    });
+    const lagerSchreiben={...kopf};
+    if(Object.keys(inhalt).length) lagerSchreiben.inhalt=inhalt;
+    if(cloud.lagerEigene && Object.keys(cloud.lagerEigene).length) lagerSchreiben.buchungen={ [geraeteUid]:kopie(cloud.lagerEigene) };
+    if(lagerSchreiben.inhalt || lagerSchreiben.buchungen)
+      ops.push(b=>b.set(lagerDok, lagerSchreiben, {merge:true}));
+    cloud.stand.lager=neu;
+    cloud.lagerGebucht={};
+  }
+
+  // History und Lieferungen: je Monat EIN Dokument mit allen Einträgen des Monats.
+  // So liest ein App-Start nur ca. 12 Dokumente pro Jahr statt jeden Eintrag einzeln (kostenloser Firebase-Tarif).
+  // Neue/gelöschte Einträge gehen als „hinzufügen/entfernen“ (arrayUnion/arrayRemove) – gleichzeitige Geräte stören sich nicht.
+  ["history","lieferungen"].forEach(art=>{
+    if(!offen[art]) return;
+    const liste = art==="history" ? historyData : lieferungen;
+    const col=ref.collection(art);
+    const ids=eintragDokIds(liste);
+    const bekannt=cloud.stand[art];
+    const neuIdx=[];
+    ids.forEach((id,i)=>{ if(!bekannt.has(id)) neuIdx.push(i); });
+    // Sortierwert: neueste oben (wie bisher unshift). Neue Einträge vorne → nur diese hinzufügen,
+    // sonst (z. B. Backup geladen) Reihenfolge für alle neu festlegen.
+    let maxS=0; bekannt.forEach(x=>{ if(x.s>maxS) maxS=x.s; });
+    const basis=Math.max(Date.now()*1000, maxS+liste.length+1);
+    const nurVorne=neuIdx.every((idx,k)=>idx===k);
+    const neuStand=new Map();
+    if(nurVorne){
+      const dazu={}, weg={};
+      ids.forEach((id,i)=>{
+        if(bekannt.has(id)){ neuStand.set(id,bekannt.get(id)); return; }
+        const obj={ id, s:basis-i, e:kopie(liste[i]) };
+        const monat=monatVon(liste[i]);
+        neuStand.set(id,{ s:obj.s, monat, obj });
+        (dazu[monat]=dazu[monat]||[]).push(obj);
+      });
+      bekannt.forEach((x,id)=>{ if(!neuStand.has(id)) (weg[x.monat]=weg[x.monat]||[]).push(x.obj); });
+      Object.entries(dazu).forEach(([m,objs])=>ops.push(b=>b.set(col.doc(m), { eintraege:FV.arrayUnion(...objs) }, {merge:true})));
+      Object.entries(weg).forEach(([m,objs])=>ops.push(b=>b.set(col.doc(m), { eintraege:FV.arrayRemove(...objs) }, {merge:true})));
+    } else {
+      const monate={};
+      ids.forEach((id,i)=>{
+        const obj={ id, s:basis-i, e:kopie(liste[i]) };
+        const m=monatVon(liste[i]);
+        (monate[m]=monate[m]||[]).push(obj);
+        neuStand.set(id,{ s:obj.s, monat:m, obj });
+      });
+      Object.entries(monate).forEach(([m,objs])=>ops.push(b=>b.set(col.doc(m), { eintraege:objs })));
+      new Set([...bekannt.values()].map(x=>x.monat)).forEach(m=>{ if(!monate[m]) ops.push(b=>b.delete(col.doc(m))); });
+    }
+    cloud.stand[art]=neuStand;
+  });
+
+  if(!ops.length) return Promise.resolve();
+  // in Paketen (Firestore erlaubt höchstens 500 Schreibvorgänge je Paket)
+  const fertig=[];
+  for(let i=0;i<ops.length;i+=400){
+    const b=db.batch();
+    ops.slice(i,i+400).forEach(f=>f(b));
+    fertig.push(b.commit().catch(cloudFehler));
+  }
+  cloud.schreibtGerade=true;
+  zeigeSyncStatus();
+  db.waitForPendingWrites().then(()=>{ cloud.schreibtGerade=false; zeigeSyncStatus(); });
+  return Promise.resolve();
+}
+
+// Wartet, bis alles bei Firestore angekommen ist (für Tests und vor dem Entfernen eines Geräts)
+async function cloudSyncFertig(){
+  cloudSchreiben();
+  await db.waitForPendingWrites();
+}
+
+function cloudFehler(e){
+  console.log("Cloud-Fehler:", e);
+  if(e && e.code==="permission-denied") pruefeGeraetNochDa();
+}
+
+// Rationen laden – genau wie beim Start aus dem localStorage
+function futterAusCloud(saved){
+  saved = saved || {};
+  return {
+    kuehe: saved.kuehe||buildCat(100),
+    kuehe2: kuehe2Laden(saved.kuehe2),
+    faersen: saved.faersen||buildCat(30),
+    // Restmischung: nur beim Öffnen aus dem Betrieb laden (Werte vom letzten Mal); danach bleibt die eigene Eingabe
+    restbullen: (cloud.restbullenBeimStart && saved.restbullen)
+      ? { rest:0, ziel:0, anz:0, collapsed:false, ...saved.restbullen }
+      : data.restbullen,
+    bullen: saved.bullen||buildCat(10),
+    trocken: saved.trocken||buildCat(5),
+    kaelber: saved.kaelber||buildCat(20)
+  };
+}
+
+function lagerStandard(){
+  return { agf:{bestand:0,orange:5,rot:2,lieferzeit:2}, mlf:{bestand:0,orange:5,rot:2,lieferzeit:2}, wasser:{bestand:0,orange:5,rot:2,lieferzeit:2} };
+}
+
+// Daten aus der Cloud übernehmen (art = futter | einstellungen | lager | history | lieferungen)
+function cloudUebernehmen(art, wert){
+  if(art==="futter"){
+    data=futterAusCloud(wert);
+    localStorage.setItem("futter",JSON.stringify(data));
+  }
+  if(art==="einstellungen"){
+    globalCfg={...defaultGlobal, ...(wert||{})};
+    localStorage.setItem("gCfg",JSON.stringify(globalCfg));
+  }
+  if(art==="lager"){
+    // wert = ganzes Lager-Dokument { inhalt, buchungen }
+    const roh = wert || {};
+    if(cloud.lagerEigene===null){
+      // Beim Öffnen: eigene Summe aus dem Gerät (falls beim letzten Mal noch nicht verschickt) – sonst aus dem Betrieb
+      const imGeraet=lagerEigeneAusGeraet();
+      const imBetrieb=(roh.buchungen && roh.buchungen[geraeteUid]) || {};
+      cloud.lagerEigene = imGeraet || kopie(imBetrieb);
+      if(imGeraet && Object.keys({...imGeraet, ...imBetrieb}).some(p=>(imGeraet[p]||0)!==(imBetrieb[p]||0))) cloud.lagerNachsenden=true;
+      lagerEigeneMerken();
+    }
+    wert = roh.inhalt || null;
+    const neu = lagerZusammen(wert || lagerStandard(), roh.buchungen);
+    // Winzige Rundungsreste aus „Abziehen/Hinzufügen“ ignorieren → Anzeige bleibt Zeichen für Zeichen gleich
+    ["agf","mlf","wasser"].forEach(p=>{
+      if(neu[p] && lagerData[p] && typeof neu[p].bestand==="number" && typeof lagerData[p].bestand==="number"
+         && Math.abs(neu[p].bestand-lagerData[p].bestand) < 1e-6) neu[p].bestand=lagerData[p].bestand;
+    });
+    lagerData=neu;
+    cloud.stand.lager = wert ? kopie(lagerData) : null;
+    cloud.lagerGebucht={};
+    localStorage.setItem("lager",JSON.stringify(lagerData));
+  }
+  if(art==="history" || art==="lieferungen"){
+    const docs=wert.slice().sort((a,b)=> (b.s-a.s) || (a.id<b.id?-1:a.id>b.id?1:0));
+    cloud.stand[art]=new Map(docs.map(d=>[d.id,{ s:d.s, monat:d.monat, obj:{ id:d.id, s:d.s, e:d.e } }]));
+    const liste=docs.map(d=>d.e);
+    if(art==="history"){ historyData=liste; localStorage.setItem("history",JSON.stringify(historyData)); }
+    else { lieferungen=liste; localStorage.setItem("lieferungen",JSON.stringify(lieferungen)); }
+  }
+}
+
+// Neu zeichnen – aber nicht, während jemand gerade etwas eintippt
+// F14: Stand vergleichen, ohne dass die Reihenfolge der Felder zählt (die Cloud liefert sie manchmal anders sortiert zurück)
+function gleicherStand(o){
+  const s=x=>Array.isArray(x) ? x.map(s) : (x && typeof x==="object") ? Object.fromEntries(Object.keys(x).sort().map(k=>[k,s(x[k])])) : x;
+  return JSON.stringify(s(o));
+}
+// F14: Felder, die nicht an gespeicherte Daten gebunden sind (Lieferung eintragen) – beim Neuzeichnen behalten
+const FORMULAR_FELDER=["liefer-produkt","liefer-datum","liefer-menge"];
+// F14: solange ein Finger/die Maus gedrückt ist, nicht neu zeichnen (sonst wäre der Knopf unter dem Finger weg)
+document.addEventListener("pointerdown",()=>{ cloud.zeigerUnten=true; cloud.zeigerSeit=Date.now(); },true);
+function zeigerLos(){
+  setTimeout(()=>{ cloud.zeigerUnten=false; if(cloud.zeichnenNachZeiger){ cloud.zeichnenNachZeiger=false; neuZeichnen(); } },0);
+}
+document.addEventListener("pointerup",zeigerLos,true);
+document.addEventListener("pointercancel",zeigerLos,true);
+
+function neuZeichnen(){
+  if(cloud.zeigerUnten && Date.now()-cloud.zeigerSeit<5000){ cloud.zeichnenNachZeiger=true; return; }
+  const a=document.activeElement;
+  if(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && a.closest(".panel")){
+    if(!cloud.wartetAufBlur){
+      cloud.wartetAufBlur=true;
+      a.addEventListener("blur",()=>{ cloud.wartetAufBlur=false; setTimeout(neuZeichnen,0); },{once:true});
+    }
+    return;
+  }
+  const merk={};
+  FORMULAR_FELDER.forEach(id=>{ const e=document.getElementById(id); if(e) merk[id]=e.value; });
+  buildCalc();
+  buildSettings();
+  buildHistory();
+  FORMULAR_FELDER.forEach(id=>{ const e=document.getElementById(id); if(e && id in merk) e.value=merk[id]; });
+  updateHistoryTabColor();
+  baueBetriebBereich();
+}
+
+// Betrieb abonnieren. Liefert ein Promise, das erfüllt ist, wenn alle Bereiche einmal geladen sind.
+function cloudAbonnieren(){
+  const ref=db.collection("betriebe").doc(betriebId);
+  const erst={};          // erster Stand je Bereich
+  const arten=["futter","einstellungen","lager","history","lieferungen"];
+  return new Promise((fertig,fehler)=>{
+    let erledigt=false;
+    const pruefeFertig=()=>{
+      if(erledigt || !arten.every(a=>erst[a])) return;
+      // Kommt alles nur aus einem leeren Zwischenspeicher (z. B. erster Start ohne Netz), auf den Server warten
+      const alleAusCache=arten.every(a=>erst[a].ausCache);
+      const cacheLeer=arten.every(a=>erst[a].leer);
+      if(alleAusCache && cacheLeer){ arten.forEach(a=>{ delete erst[a]; }); zeigeSyncStatus("warte"); return; }
+      erledigt=true;
+      cloud.restbullenBeimStart = true;
+      arten.forEach(a=>cloudUebernehmen(a, erst[a].wert));
+      cloud.restbullenBeimStart = false;
+      fertig();
+    };
+    const empfangen=(art, wert, meta, leer)=>{
+      if(!erledigt){
+        erst[art]={ wert, ausCache:meta.fromCache, leer };
+        pruefeFertig();
+        return;
+      }
+      // Eigene, noch unbestätigte Änderungen oder ungespeicherte lokale Änderungen: abwarten
+      if(meta.hasPendingWrites || cloud.offen[art]) return;
+      const vorher=gleicherStand([data,globalCfg,lagerData,historyData,lieferungen]);
+      cloudUebernehmen(art, wert);
+      if(gleicherStand([data,globalCfg,lagerData,historyData,lieferungen])!==vorher) neuZeichnen();
+    };
+    ["futter","einstellungen","lager"].forEach(art=>{
+      cloud.abos.push(ref.collection("daten").doc(art).onSnapshot({includeMetadataChanges:true}, s=>{
+        empfangen(art, s.exists ? (art==="lager" ? s.data() : s.data().inhalt) : null, s.metadata, !s.exists);
+      }, e=>{ cloudFehler(e); fehler(e); }));
+    });
+    ["history","lieferungen"].forEach(art=>{
+      cloud.abos.push(ref.collection(art).onSnapshot({includeMetadataChanges:true}, q=>{
+        const alle=[];
+        q.docs.forEach(d=>(d.data().eintraege||[]).forEach(o=>alle.push({ ...o, monat:d.id })));
+        empfangen(art, alle, q.metadata, alle.length===0);
+      }, e=>{ cloudFehler(e); fehler(e); }));
+    });
+    // Eigener Geräte-Eintrag: verschwindet er, wurde dieses Gerät aus dem Betrieb entfernt
+    cloud.abos.push(ref.collection("geraete").doc(geraeteUid).onSnapshot(s=>{
+      if(!s.exists && !s.metadata.fromCache) geraetEntfernt();
+    }, e=>cloudFehler(e)));
+  });
+}
+
+async function pruefeGeraetNochDa(){
+  if(!geraeteUid) return;
+  try{
+    const z=await db.collection("geraetezuordnung").doc(geraeteUid).get({source:"server"});
+    if(!z.exists) geraetEntfernt();
+  }catch(e){
+    if(e.code==="permission-denied") geraetEntfernt();
+  }
+}
+
+// Gerät wurde entfernt: Daten des Betriebs von diesem Gerät löschen, Zugangsseite zeigen
+async function geraetEntfernt(){
+  if(cloud.entfernt) return;
+  cloud.entfernt=true;
+  cloud.aktiv=false;
+  cloud.abos.forEach(a=>a()); cloud.abos=[];
+  ["futter","gCfg","history","lager","lieferungen","betriebId","lagerEigene"].forEach(k=>localStorage.removeItem(k));
+  try{ await db.terminate(); await db.clearPersistence(); }catch(e){}
+  alert("Dieses Gerät wurde aus dem Betrieb entfernt.");
+  location.reload();
+}
+
+function zeigeSyncStatus(zustand){
+  const el=document.getElementById("sync-status");
+  if(!el) return;
+  if(zustand==="laden"){ el.textContent="⏳ lade Daten…"; return; }
+  if(zustand==="warte"){ el.textContent="📴 keine Verbindung – bitte einmal mit Internet öffnen"; return; }
+  if(!cloud.aktiv){ el.textContent=""; return; }
+  const offen = Object.keys(cloud.offen).length>0 || cloud.schreibtGerade;
+  el.textContent = !navigator.onLine
+    ? (offen ? "📴 offline – wird gespeichert, sobald Netz da ist" : "📴 offline")
+    : (offen ? "⏳ speichert…" : "☁️ gespeichert");
+}
+window.addEventListener("online",()=>zeigeSyncStatus());
+window.addEventListener("offline",()=>zeigeSyncStatus());
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") cloudSchreiben(); });
+window.addEventListener("pagehide",()=>cloudSchreiben());
+
+// Der Bereich „Betrieb“ erscheint im Tab Einstellungen unter den bisherigen Einstellungen
+const _showTabOriginal = showTab;
+showTab = function(t){
+  _showTabOriginal(t);
+  document.getElementById("betrieb").classList.toggle("hidden", t!=="settings");
+};
+
+function zumBetrieb(){
+  showTab("settings");
+  document.getElementById("betrieb").scrollIntoView({behavior:"smooth"});
+}
+
+function baueBetriebBereich(){
+  const el=document.getElementById("betrieb");
+  if(!el) return;
+  const link=document.getElementById("betrieb-link");
+  if(link) link.style.display = betriebId ? "inline" : "none";
+  const alt=localStorage.getItem("datenVorUmbau") && !localStorage.getItem("datenVorUmbauUebernommen");
+  el.innerHTML=`
+  <hr>
+  <h3>Betrieb</h3>
+  <div id="betrieb-name">${betriebId ? "" : "–"}</div>
+  <div style="font-size:12px;color:#666;margin-top:6px">Gerätekennung: ${geraeteUid||"–"}</div>
+  ${alt ? `
+  <p style="background:#fff8e1;padding:10px;border-radius:8px">
+    Auf diesem Gerät liegen noch Daten von vor dem Umbau (nur auf diesem Gerät, nicht im Betrieb):<br>
+    <span style="font-size:13px">${esc(altDatenZusammenfassung())}</span><br><br>
+    <button class="save-btn" onclick="altDatenUebernehmen()">In den Betrieb übernehmen</button>
+    <button class="save-btn" onclick="altDatenHerunterladen()">Als Backup herunterladen</button>
+  </p>` : ""}
+  ${localStorage.getItem("betriebVorUebernahme") ? `
+  <p style="font-size:13px">Stand des Betriebs vor der Übernahme:
+    <a href="#" onclick="altDatenHerunterladen('betriebVorUebernahme');return false;">als Backup herunterladen</a></p>` : ""}
+  <h3>Geräte</h3>
+  <div id="verwaltung-hinweis"></div>
+  <div id="geraete-liste">lade…</div>
+  <p><button class="save-btn" id="einladen-knopf" onclick="einladungErzeugen()">+ Gerät hinzufügen (QR-Code / PIN)</button></p>
+  <div id="einladung-anzeige"></div>
+  <div id="betreiber-bereich"></div>
+  <h3>App weitergeben</h3>
+  <p style="font-size:13px;color:#555">Link zur Download-Seite der Android-App. Der Link allein gibt keinen Zugriff auf Daten –
+    dafür braucht es eine Einladung (QR-Code/PIN) oder eine Freigabe.</p>
+  <div style="font-size:12px;word-break:break-all;background:#f5f7fa;padding:6px;border-radius:6px">${esc(appLink())}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+    <button class="save-btn" style="margin:0" onclick="linkTeilen(appLink(),'Futterrechner-App herunterladen')">📤 Teilen</button>
+    <a class="save-btn" style="margin:0;text-decoration:none;background:#25d366" target="_blank" rel="noopener"
+       href="https://wa.me/?text=${encodeURIComponent('Futterrechner-App herunterladen: '+appLink())}">WhatsApp</a>
+    <button class="save-btn" style="margin:0;background:#2f80ed" onclick="linkKopieren(appLink())">Kopieren</button>
+  </div>
+  `;
+  if(aktiveEinladung) zeigeEinladung();
+  if(betriebId){
+    // Nur auf Fritz' Geräten: Betreiber-PIN für die Freigabe auf anderen Geräten
+    istBetreiberGeraetHier().then(ja=>{
+      const b=document.getElementById("betreiber-bereich");
+      if(!b || !ja) return;
+      b.innerHTML=`<h3>Betreiber</h3>
+        <p style="font-size:13px;color:#555">Mit der Betreiber-PIN kannst du Freigabe-Links aus der E-Mail auf jedem Gerät
+          bestätigen (PC, Tablet, Gmail-Fenster).</p>
+        <button class="save-btn" style="margin:0" onclick="betreiberPinFestlegen()">Betreiber-PIN festlegen / ändern</button>`;
+    });
+    verwaltungsPinGesetzt().then(gesetzt=>{
+      const h=document.getElementById("verwaltung-hinweis");
+      if(!h) return;
+      h.innerHTML = gesetzt
+        ? `<p style="font-size:13px;color:#555">🔒 Geräte hinzufügen und entfernen nur mit der Verwaltungs-PIN des Betriebsleiters.
+             <a href="#" onclick="verwaltungsPinFestlegen(true);return false;">PIN ändern</a></p>`
+        : `<p style="background:#fff8e1;padding:10px;border-radius:8px">🔒 <b>Betriebsleiter:</b> Bitte zuerst eine
+             Verwaltungs-PIN festlegen. Nur mit ihr können Geräte hinzugefügt oder entfernt werden.<br><br>
+             <button class="save-btn" onclick="verwaltungsPinFestlegen(false)">Verwaltungs-PIN festlegen</button></p>`;
+    });
+    baueGeraeteListe();
+    einladungenAufraeumen();
+    db.collection("betriebe").doc(betriebId).get().then(s=>{
+      const n=document.getElementById("betrieb-name");
+      if(n && s.exists) n.textContent=s.data().name||"";
+    }).catch(()=>{});
+  }
+}
+
+// Sicherheitskopie der Daten, die vor dem Umbau nur auf diesem Gerät lagen
+function altDatenSichern(){
+  if(localStorage.getItem("betriebId") || localStorage.getItem("datenVorUmbau")) return;
+  const hatDaten=["futter","history","lager","lieferungen","gCfg"].some(k=>localStorage.getItem(k));
+  if(!hatDaten) return;
+  localStorage.setItem("datenVorUmbau", JSON.stringify({
+    data, globalCfg, historyData, lagerData, lieferungen, hiddenWarnings, historyCollapsed
+  }, null, 2));
+}
+
+// Übernahme über die vorhandene Backup-Funktion (wie „Backup laden“ mit der gesicherten Datei)
+function altDatenUebernehmen(){
+  // Hat der Betrieb schon Daten (z. B. von einem anderen Gerät übernommen), deutlich warnen – sonst würden sie ersetzt
+  const betriebHatDaten = cloud.stand.history.size>0 || cloud.stand.lieferungen.size>0 || !!cloud.stand.lager;
+  if(betriebHatDaten && !confirm(
+    "ACHTUNG: Im Betrieb sind schon Daten (z. B. von einem anderen Gerät übernommen oder neu eingegeben).\n\n"+
+    "Wenn du jetzt übernimmst, werden ALLE Daten des Betriebs durch die alten Daten DIESES Geräts ersetzt.\n"+
+    "Normalerweise übernimmt man nur auf EINEM Gerät – dem mit den neuesten Daten.\n\nTrotzdem ersetzen?")) return;
+  // Stand des Betriebs vorher sichern (falls doch das falsche Gerät gewählt wurde)
+  localStorage.setItem("betriebVorUebernahme", JSON.stringify({
+    data, globalCfg, historyData, lagerData, lieferungen, hiddenWarnings, historyCollapsed
+  }, null, 2));
+  // Rückfrage kommt aus importBackup() (F4)
+  const datei=new File([localStorage.getItem("datenVorUmbau")||"{}"],"futterrechner-backup-vor-umbau.json",{type:"application/json"});
+  if(!importBackup({ target:{ files:[datei] } })) return;
+  localStorage.setItem("datenVorUmbauUebernommen", new Date().toISOString());
+  setTimeout(baueBetriebBereich, 500);
+}
+
+// Kurzbeschreibung der alten Daten, damit man das Gerät mit den neuesten Daten erkennt
+function altDatenZusammenfassung(){
+  try{
+    const b=JSON.parse(localStorage.getItem("datenVorUmbau")||"{}");
+    const h=b.historyData||[];
+    const l=b.lagerData||{};
+    const neueste=h.map(e=>(e.datum||"").split(".").reverse().join("-")).sort().pop();
+    const g=b.globalCfg||{};
+    return `${h.length} Tageseinträge` + (neueste ? `, neuester vom ${neueste.split("-").reverse().join(".")}` : "") +
+      `, Lager ${g.agfName||"AGF"} ${((l.agf||{}).bestand||0).toFixed(1)} kg / ${g.mlfName||"MLF"} ${((l.mlf||{}).bestand||0).toFixed(1)} kg` +
+      `, ${(b.lieferungen||[]).length} Lieferungen`;
+  }catch(e){ return ""; }
+}
+
+function altDatenHerunterladen(schluessel){
+  const k = schluessel || "datenVorUmbau";
+  const blob=new Blob([localStorage.getItem(k)||"{}"],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download = k==="datenVorUmbau" ? "futterrechner-backup-vor-umbau.json" : "futterrechner-backup-vor-uebernahme.json";
+  a.click();
+}
+
+// Anonyme Geräte-Anmeldung: jedes Gerät bekommt eine feste Kennung (uid)
+function anmelden(){
+  return new Promise((ok,fehler)=>{
+    const stop=auth.onAuthStateChanged(user=>{
+      stop();
+      if(user) ok(user);
+      else auth.signInAnonymously().then(c=>ok(c.user)).catch(fehler);
+    }, fehler);
+  });
+}
+
+function zeigeApp(){
+  buildCalc();
+  buildSettings();
+  buildCalc2();
+  buildHistory();
+  updateHistoryTabColor();
+  baueBetriebBereich();
+}
+
+async function starten(){
+  zeigeSyncStatus("laden");
+  try{
+    const user=await anmelden();
+    geraeteUid=user.uid;
+  }catch(e){
+    console.log("Anmeldung fehlgeschlagen:", e);
+    zeigeSyncStatus("warte");
+    return;
+  }
+
+  // Zu welchem Betrieb gehört dieses Gerät?
+  let zuordnung=null;
+  try{
+    const z=await db.collection("geraetezuordnung").doc(geraeteUid).get();
+    zuordnung = z.exists ? z.data().betriebId : null;
+  }catch(e){
+    // ohne Netz und nicht im Zwischenspeicher: bisherigen Betrieb weiter benutzen
+    zuordnung = betriebId;
+  }
+
+  if(!zuordnung){
+    betriebId=null;
+    localStorage.removeItem("betriebId");
+    zeigeSyncStatus();
+    zeigeZugangsseite();
+    return;
+  }
+
+  altDatenSichern();
+  betriebId=zuordnung;
+  localStorage.setItem("betriebId",betriebId);
+  try{
+    await cloudAbonnieren();
+  }catch(e){
+    console.log("Laden fehlgeschlagen:", e);
+    if(e && e.code==="permission-denied"){
+      // Zuordnung zeigt auf einen Betrieb, in dem das Gerät nicht (mehr) steht → Zuordnung löschen, neu anfragen
+      try{ await db.collection("geraetezuordnung").doc(geraeteUid).delete(); }catch(x){}
+      geraetEntfernt();
+    }
+    return;
+  }
+  cloud.aktiv=true;
+  if(cloud.lagerNachsenden && !istTestversion){ cloud.lagerNachsenden=false; cloudSpeichern("lager"); }
+  zeigeSyncStatus();
+  zeigeApp();
+}
+
+// Kein Betrieb zugeordnet → Zugang anfragen (oder warten, falls schon angefragt)
+function zeigeZugangsseite(){
+  document.getElementById("agb-fassung").textContent=AGB_FASSUNG;
+  document.getElementById("datenschutz-fassung").textContent=DATENSCHUTZ_FASSUNG;
+  showRequestForm();
+  zugangAnsicht("formular");
+  const k=document.getElementById("zugang-kennung");
+  if(k) k.textContent="Gerätekennung: "+geraeteUid;
+  beobachteEigeneAnfrage();
+  // Testversion: keine neue Anfrage, nur mit PIN/QR-Code als weiteres Gerät des Betriebs verbinden
+  if(istTestversion){
+    const f=document.getElementById("zugang-formular");
+    [...f.children].forEach(c=>{ if(c.id!=="zugang-abgelehnt") c.style.display="none"; });
+    if(!document.getElementById("testversion-zugang")) f.insertAdjacentHTML("afterbegin",
+      "<p id='testversion-zugang'><b>Testversion:</b> bitte in der normalen App unter Einstellungen → Betrieb → „+ Gerät hinzufügen“ eine PIN erzeugen und unten eingeben.</p>");
+  }
+}
+
+// Start: Freigabe-Link (?approve= / ?deny=), Einladung per QR-Code (?einladung=) oder normale App
+(async()=>{
+  if(approveID || denyID){
+    try{ geraeteUid=(await anmelden()).uid; }catch(e){}
+    zeigeFreigabe();
+    return;
+  }
+  if(einladungsCode){
+    try{ geraeteUid=(await anmelden()).uid; }catch(e){}
+    const z=await db.collection("geraetezuordnung").doc(geraeteUid).get().catch(()=>null);
+    if(!z || !z.exists){ zeigeEinladungsSeite(); return; }
+    // Gerät ist schon in einem Betrieb → Einladung ignorieren, normal starten
+  }
+  starten();
+})();
+
 </script>
 
-<div id="accessBlock" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;justify-content:center;align-items:center;">
-  <div style="background:white;padding:30px;border-radius:10px;width:300px;text-align:center;">
-    <h2>Zugriff anfragen</h2>
+<div id="accessBlock" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;justify-content:center;align-items:flex-start;overflow:auto;">
+  <div style="background:white;padding:24px;border-radius:10px;width:320px;max-width:92%;text-align:center;">
+    <h2>Zugang anfragen</h2>
 
-    <input id="vorname" placeholder="Vorname"><br>
-    <input id="nachname" placeholder="Nachname"><br>
-    <input id="email" placeholder="E-Mail"><br>
+    <div id="zugang-formular">
+      <input id="vorname" placeholder="Vorname" autocomplete="given-name" style="width:100%;padding:8px;margin:4px 0;box-sizing:border-box"><br>
+      <input id="nachname" placeholder="Nachname" autocomplete="family-name" style="width:100%;padding:8px;margin:4px 0;box-sizing:border-box"><br>
+      <input id="betriebsname" placeholder="Name des Betriebs" autocomplete="organization" style="width:100%;padding:8px;margin:4px 0;box-sizing:border-box"><br>
+      <input id="email" placeholder="E-Mail" type="email" autocomplete="email" style="width:100%;padding:8px;margin:4px 0;box-sizing:border-box"><br>
 
-    <label style="font-size:12px;">
-      <input type="checkbox" id="zustimmung">
-      Zustimmung zur Datenspeicherung
-    </label><br><br>
+      <label style="font-size:13px;display:block;text-align:left;margin:10px 0">
+        <input type="checkbox" id="zustimmung-agb">
+        Ich akzeptiere die <a href="agb.html" target="_blank">AGB</a>
+        (Fassung <span id="agb-fassung"></span>).
+      </label>
+      <label style="font-size:13px;display:block;text-align:left;margin:10px 0">
+        <input type="checkbox" id="zustimmung-datenschutz">
+        Ich habe die <a href="datenschutz.html" target="_blank">Datenschutzerklärung</a>
+        (Fassung <span id="datenschutz-fassung"></span>) gelesen.
+      </label>
 
-    <button onclick="anfrageSenden()">Anfrage senden</button>
+      <button id="anfrage-knopf" class="save-btn" onclick="anfrageSenden()">Anfrage senden</button>
+      <div id="zugang-abgelehnt" style="display:none;color:#c40000;margin-top:12px">Deine letzte Anfrage wurde abgelehnt.</div>
+    </div>
+
+    <hr style="margin:18px 0">
+    <p><b>Dein Betrieb benutzt den Futterrechner schon?</b><br>
+      <span style="font-size:13px">Dann auf einem Gerät des Betriebs unter Einstellungen → „Gerät hinzufügen“ den QR-Code
+      scannen – oder die PIN hier eingeben:</span></p>
+    <button class="save-btn" style="background:#2f80ed" onclick="pinBereichZeigen()">Ich habe eine PIN</button>
+    <div id="zugang-pin" style="display:none;margin-top:10px">
+      <input id="pin-eingabe" inputmode="numeric" maxlength="9" placeholder="8-stellige PIN" style="font-size:22px;letter-spacing:3px;width:100%;padding:8px;box-sizing:border-box;text-align:center"><br>
+      <input id="pin-geraetename" placeholder="Name dieses Geräts (z. B. Handy Stall)" style="width:100%;padding:8px;margin:6px 0;box-sizing:border-box"><br>
+      <button class="save-btn" onclick="pinEinloesen()">Beitreten</button>
+    </div>
+
+    <div id="zugang-warten" style="display:none">
+      <p>✅ Anfrage gesendet.</p>
+      <p>Sobald sie freigegeben ist, startet die App hier von selbst. Du kannst die Seite auch schließen und später wieder öffnen.</p>
+    </div>
+
+    <div id="zugang-kennung" style="font-size:11px;color:#888;margin-top:14px"></div>
+  </div>
+</div>
+
+<div id="pinDialog" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);z-index:10000;justify-content:center;align-items:center;">
+  <div style="background:#fff;padding:20px;border-radius:12px;width:300px;max-width:90%;text-align:center">
+    <h3 id="pinDialog-titel" style="margin-top:0"></h3>
+    <p id="pinDialog-text" style="font-size:14px"></p>
+    <input id="pinDialog-feld" type="password" inputmode="numeric" autocomplete="off" maxlength="20"
+      style="font-size:24px;letter-spacing:4px;width:100%;padding:8px;box-sizing:border-box;text-align:center">
+    <p>
+      <button id="pinDialog-abbrechen" class="save-btn" style="background:#888">Abbrechen</button>
+      <button id="pinDialog-ok" class="save-btn">OK</button>
+    </p>
+  </div>
+</div>
+
+<div id="einladungBlock"style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;justify-content:center;align-items:flex-start;overflow:auto;">
+  <div style="background:white;padding:24px;border-radius:10px;width:360px;max-width:94%;text-align:center;">
+    <h2>🐄 Futterrechner</h2>
+    <div id="einladung-inhalt">Prüfe Einladung…</div>
+  </div>
+</div>
+
+<div id="freigabeBlock"style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;justify-content:center;align-items:flex-start;overflow:auto;">
+  <div style="background:white;padding:24px;border-radius:10px;width:420px;max-width:94%;">
+    <h2>Zugangsanfrage</h2>
+    <div id="freigabe-inhalt">Lade Anfrage…</div>
   </div>
 </div></body>
 </html>
