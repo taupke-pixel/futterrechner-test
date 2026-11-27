@@ -103,7 +103,7 @@ async function main() {
     const R = 2000, fk = (G - R) / PLAN1;      // Stall 1 hat (G − 2000) statt PLAN1 bekommen
     await pruefe(`Verladen (Waage ${R} statt ${PLAN_REST.toFixed(0)} kg), Gruppe 2 mitziehen: Stall 1 +${Math.round((fk - 1) * 100)} %, Gruppe 2 auch; nachladen + MLF; jedes kg genau einmal`, async () => {
       await heuteLeeren();
-      await page.evaluate(r => { data.kuehe2.zusRest = r; data.kuehe2.zusAnpassen = true; save(); buildCalc(); }, R);
+      await page.evaluate(r => { data.kuehe2.zusRest = r; data.kuehe2.zusRestTag = getToday(); data.kuehe2.zusAnpassen = true; save(); buildCalc(); }, R);
       const t = await page.locator(".zusammen-karte").innerText();
       assert(t.includes(`✎ Waage zeigte ${R} kg → Kühe hat ${(G - R).toFixed(0)} kg bekommen`), t);
       assert(t.includes(`auch +${Math.round((fk - 1) * 100)} %`), t);
@@ -124,7 +124,7 @@ async function main() {
 
     await pruefe(`Verladen, Gruppe 2 normal: Gruppe 2 bekommt ihre normale Menge, Stall 1 merkt sich ${(G - R - PLAN1).toFixed(0)} kg „mehr“`, async () => {
       await heuteLeeren();
-      await page.evaluate(r => { data.kuehe2.zusRest = r; data.kuehe2.zusAnpassen = false; save(); buildCalc(); }, R);
+      await page.evaluate(r => { data.kuehe2.zusRest = r; data.kuehe2.zusRestTag = getToday(); data.kuehe2.zusAnpassen = false; save(); buildCalc(); }, R);
       const t = await page.locator(".zusammen-karte").innerText();
       assert(t.includes(`Kühe Gruppe 2 wird normal gefüttert – die ${(G - R - PLAN1).toFixed(0)} kg mehr rechnet die Auswertung beim Rest mit.`), t);
       await page.click(".zusammen-karte .save-btn");
@@ -136,7 +136,7 @@ async function main() {
 
     await pruefe("Zu viel Rest (Waage 3000 kg): Gruppe 2 bekommt alles im Wagen + MLF, nichts abgezogen oder doppelt", async () => {
       await heuteLeeren();
-      await page.evaluate(() => { data.kuehe2.zusRest = 3000; data.kuehe2.zusAnpassen = null; buildCalc(); });
+      await page.evaluate(() => { data.kuehe2.zusRest = 3000; data.kuehe2.zusRestTag = getToday(); data.kuehe2.zusAnpassen = null; buildCalc(); });
       assert((await page.locator(".zusammen-karte").innerText()).includes("schon zu viel"));
       await page.click(".zusammen-karte .save-btn");
       const e = await eintraege();
@@ -196,7 +196,7 @@ async function main() {
         setze(data.kuehe.items, [["Mais", 27], ["Schnitt 5", 14], ["Schnitt 2", 9], ["Stroh", 0.2], ["agf", 3]]);
         setze(data.kuehe2.items, [["Mais", 27.5], ["Schnitt 5", 15], ["Schnitt 2", 7], ["Stroh", 0.2], ["agf", 4], ["mlf", 3]]);
         data.kuehe.anz = 35; data.kuehe2.anz = 55; data.kuehe2.zusRest = null; showTab("calc"); buildCalc();
-        const plan = () => { const p = zusammenPlan(); return { f: p.f, eng: p.engpass && p.engpass.name, z: Object.fromEntries(p.zugabe.map(z => [z.it.type || z.it.name, Math.round(z.kg * 10) / 10])), text: document.querySelector(".zusammen-karte").innerText }; };
+        const plan = () => { const p = zusammenPlan(); return { f: p.f, eng: p.engpass && p.engpass.name, z: Object.fromEntries(p.zugabe.map(z => [z.it.type || z.it.name, Math.round(z.kg * 10) / 10])), ord: p.zugabe.map(z => z.it.type || z.it.name), ord2: data.kuehe2.items.filter(i => i.kg > 0).map(i => i.type || i.name).filter(n => p.zugabe.some(z => (z.it.type || z.it.name) === n)), text: document.querySelector(".zusammen-karte").innerText }; };
         const a = plan();
         document.querySelector(".zusammen-voll").click();   // „passt so – 100 % Grundmischung“
         const v = plan(); v.zuViel = Object.fromEntries(zusammenPlan().zuViel.map(z => [z.it.type || z.it.name, Math.round(z.kg * 10) / 10]));
@@ -211,6 +211,7 @@ async function main() {
         return { a, b, c, v };
       });
       assert(Math.abs(r.a.f - 7 / 9) < 1e-9 && r.a.eng === "Schnitt 2", JSON.stringify(r.a));
+      assert.deepStrictEqual(r.a.ord, r.a.ord2, "Dazumischen in der Reihenfolge von Gruppe 2");
       assert.deepStrictEqual(r.a.z, { Mais: 357.5, "Schnitt 5": 226.1, Stroh: 2.4, agf: 91.7, mlf: 165 });
       assert(r.a.text.includes("Vor dem Laden wählen") && r.a.text.includes("78 % Grundmischung (41.4 kg je Tier), weil Kühe Gruppe 2 weniger Schnitt 2 bekommt"), r.a.text);
       assert(!r.a.text.includes("fehlt"), r.a.text);
@@ -224,6 +225,43 @@ async function main() {
       assert(Math.abs(r.v.zurueck - 7 / 9) < 1e-9, "genau rechnen");
       assert.strictEqual(r.c.f, 0);
       assert(r.c.text.includes("fehlt Schnitt 2 aus der Grundmischung"), r.c.text);
+    });
+
+    await pruefe("Kein zweites MLF-Feld in Gruppe 2: beim Umstellen wird getauscht statt doppelt angelegt; ein vorhandenes leeres zweites MLF-Feld wird ein normales Feld (Name MLF bleibt)", async () => {
+      const r = await page.evaluate(() => {
+        const alt = JSON.stringify({ k: data.kuehe, k2: data.kuehe2, n: globalCfg.mlfName, m: globalCfg.kuehe2Modus });
+        globalCfg.mlfName = "Kraft";
+        const it = (o) => Object.assign({ kg: 0 }, o);
+        // 1) vorhandene Doppelung (wie auf dem Tablet 27.11.)
+        data.kuehe2.items = [it({ name: "Stroh", kg: 0.2 }), it({ type: "agf", kg: 3 }), it({ type: "mlf" }), it({ type: "mlf", kg: 4 }), it({ name: "Mais", kg: 30 }), it({ type: "wasser", kg: 2 })];
+        showTab("settings"); buildSettings();
+        const t1 = data.kuehe2.items.map(i => i.type || i.name);
+        // 2) Umstellen mit anderer Reihenfolge: MLF bei Kühe an Stelle 2, bei Gruppe 2 an Stelle 4
+        kuehe2ModusSetzen("normal");
+        data.kuehe.items = [it({ name: "Stroh", kg: 0.2 }), it({ type: "agf", kg: 3 }), it({ type: "mlf", kg: 1 }), it({ name: "Mais", kg: 23 }), it({ name: "Futter 5" }), it({ type: "wasser", kg: 2 })];
+        data.kuehe2.items = [it({ name: "Stroh", kg: 0.2 }), it({ type: "agf", kg: 3 }), it({ name: "Futter 3" }), it({ name: "Mais", kg: 30 }), it({ type: "mlf", kg: 4 }), it({ type: "wasser", kg: 2 })];
+        kuehe2ModusSetzen("zusammen");
+        const t2 = data.kuehe2.items.map(i => (i.type || i.name) + " " + i.kg);
+        const o = JSON.parse(alt); data.kuehe = o.k; data.kuehe2 = o.k2; globalCfg.mlfName = o.n; kuehe2ModusSetzen(o.m); save();
+        return { t1, t2 };
+      });
+      assert.deepStrictEqual(r.t1, ["Stroh", "agf", "Futter 3", "mlf", "Mais", "wasser"]);
+      assert.deepStrictEqual(r.t2, ["Stroh 0.2", "agf 3", "mlf 1", "Mais 23", "Futter 3 0", "wasser 2"]);
+    });
+
+    await pruefe("„Anders abgeladen“ von gestern gilt heute nicht mehr (wieder wie geplant)", async () => {
+      const r = await page.evaluate(() => {
+        historyData = historyData.filter(h => h.datum !== getToday());
+        data.kuehe2.zusRest = 1490; data.kuehe2.zusRestTag = "26.11.2000"; buildCalc();
+        const gestern = zusammenPlan().echt;
+        data.kuehe2.zusRestTag = undefined; buildCalc();
+        const ohneTag = zusammenPlan().echt;
+        data.kuehe2.zusRestTag = getToday(); buildCalc();
+        const heute = zusammenPlan().echt;
+        data.kuehe2.zusRest = null; data.kuehe2.zusRestTag = null; save(); buildCalc();
+        return { gestern, ohneTag, heute };
+      });
+      assert.deepStrictEqual(r, { gestern: null, ohneTag: null, heute: 1490 });
     });
 
     await pruefe("Zurück auf „eigene Mischung“ → Rechner genau wie vorher; Gruppe 2 behält die übernommenen Werte zum Weiterbearbeiten", async () => {
