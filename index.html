@@ -210,6 +210,7 @@ font-size:16px;
   background:#f59e0b !important;
   color:white !important;
 }
+#settings input.name-fest{background:#eee;color:#555;}
 </style>
 <style>
 /* 📱 Handy-Ansicht: nichts darf breiter als der Bildschirm sein, sonst zoomt das Handy heraus (sieht aus wie PC-Seite).
@@ -1030,7 +1031,7 @@ function restQuelleUmschalten(cat, feld){
 function restMischungZeilen(){
   let zeilen=[];
   restQuellen().forEach((cat,qi)=>{
-    let items=data[cat].items;
+    let items=restZusammensetzung(cat);
     let total=0;
     items.forEach(i=>total+=i.kg);
     let rest=restMenge(qi);
@@ -1045,7 +1046,27 @@ function restMischungZeilen(){
       zeilen.push({ it, ist });
     });
   });
+  // Futter, die nur die Ration der Restmischung hat (nicht im Rest): Ist 0 → wird voll dazugeladen und gespeichert (Fritz 27.11.)
+  const gleich=(x,y)=>(x.type||y.type) ? x.type===y.type : x.name===y.name;
+  data[restZiel()].items.forEach(b=>{
+    if(b.kg>0 && !zeilen.some(z=>gleich(z.it,b))) zeilen.push({ it:b, ist:0, nurZiel:true });
+  });
   return zeilen;
+}
+// Woraus der Rest einer Gruppe besteht. Normal: ihre Ration. Kühe Gruppe 2 „zusammen mischen“: das, was zuletzt
+// (heute/gestern) wirklich an sie verfüttert wurde – bei „Volle Grundmischung“ ist das mehr als ihre Ration (Fritz 27.11.).
+function restZusammensetzung(cat){
+  if(cat!=="kuehe2" || typeof kuehe2Zusammen!=="function" || !kuehe2Zusammen()) return data[cat].items;
+  const tag=n=>{ const x=new Date(); x.setDate(x.getDate()-n); return String(x.getDate()).padStart(2,"0")+"."+String(x.getMonth()+1).padStart(2,"0")+"."+x.getFullYear(); };
+  const e=historyData.find(h=>h.kategorie==="kuehe2" && (h.datum===tag(0) || h.datum===tag(1)) && (h.futter||[]).length);
+  const alle=[...data.kuehe2.items, ...data.kuehe.items];
+  if(e) return e.futter.map(f=>{
+    const it=alle.find(i=>i.type && futterName(i)===f.name);
+    return it ? { type:it.type, kg:f.kg } : { name:f.name, kg:f.kg };
+  });
+  // noch nichts gespeichert: wie heute geplant
+  const p=zusammenPlan();
+  return p.zeilen2.map(z=>({ ...(z.it.type ? { type:z.it.type } : { name:z.it.name }), kg:z.ist+Math.max(0,z.diff) }));
 }
 
 let restbullenEnde=null;   // Endsumme der Tabelle inkl. Wasser aus dem Rest (für „abladen bis … kg“, Fritz 27.11.)
@@ -1062,7 +1083,7 @@ let lauf = rest + (quellen.length>1 ? (data.restbullen.rest2||0) : 0);
 
 let bull = data[restZiel()].items;
 
-restMischungZeilen().forEach(({it, ist})=>{
+restMischungZeilen().forEach(({it, ist, nurZiel})=>{
 
   // AGF / MLF nur wenn bei Bullen vorhanden UND kg > 0
   if(it.type==="agf" || it.type==="mlf" || it.type==="wasser"){
@@ -1116,7 +1137,7 @@ let summe = lauf;
     it.name;
 
 rows += `
-<tr>
+<tr${nurZiel ? ' class="rest-nur-ziel"' : ''}>
 <td>${name}</td>
 <td>${ist.toFixed(1)}</td>
 <td>${soll.toFixed(1)}</td>
@@ -1840,22 +1861,22 @@ Thüringen
 <hr>
   <h3>AGF / MLF</h3>
   AGF Name <input value="${globalCfg.agfName}" 
-    oninput="globalCfg.agfName=this.value;saveGlobal();buildCalc();" 
-    onblur="buildSettings();"><br>
+    onfocus="this.dataset.alt=this.value" oninput="globalCfg.agfName=this.value;saveGlobal();buildCalc();" 
+    onblur="if(!this.value.trim()){globalCfg.agfName=this.dataset.alt||globalCfg.agfName;saveGlobal();buildCalc();}buildSettings();"><br>
 
   kg/s <input type="number" value="${globalCfg.agfKg}" 
     oninput="globalCfg.agfKg=num(this.value)||0.01;saveGlobal();buildCalc();"><br><br>
 
   MLF Name <input value="${globalCfg.mlfName}" 
-    oninput="globalCfg.mlfName=this.value;saveGlobal();buildCalc();" 
-    onblur="buildSettings();"><br>
+    onfocus="this.dataset.alt=this.value" oninput="globalCfg.mlfName=this.value;saveGlobal();buildCalc();" 
+    onblur="if(!this.value.trim()){globalCfg.mlfName=this.dataset.alt||globalCfg.mlfName;saveGlobal();buildCalc();}buildSettings();"><br>
 
   kg/s <input type="number" value="${globalCfg.mlfKg}" 
     oninput="globalCfg.mlfKg=num(this.value)||0.01;saveGlobal();buildCalc();">
   <span class="drittes-futter"><br><br>
   3. Futter Name <input value="${globalCfg.wasserName}" 
-    oninput="globalCfg.wasserName=this.value;saveGlobal();buildCalc();" 
-    onblur="buildSettings();"><br>
+    onfocus="this.dataset.alt=this.value" oninput="globalCfg.wasserName=this.value;saveGlobal();buildCalc();" 
+    onblur="if(!this.value.trim()){globalCfg.wasserName=this.dataset.alt||globalCfg.wasserName;saveGlobal();buildCalc();}buildSettings();"><br>
 
   kg/s <input type="number" value="${globalCfg.wasserKg}" 
     oninput="globalCfg.wasserKg=num(this.value)||0.01;saveGlobal();buildCalc();"></span><hr>
@@ -1925,13 +1946,10 @@ Thüringen
         </div>`:`<div></div>`}
         
         <div>
-          <input type="text" value="${name}" oninput="
-            if('${it.type}'==='agf'){globalCfg.agfName=this.value;saveGlobal();}
-            else if('${it.type}'==='mlf'){globalCfg.mlfName=this.value;saveGlobal();}
-            else if('${it.type}'==='wasser'){globalCfg.wasserName=this.value;saveGlobal();}
-            else{data['${cat}'].items[${i}].name=this.value;save();}
+          ${it.type ? `<input type="text" class="name-fest" value="${name}" readonly title="Name nur oben bei AGF / MLF änderbar">` : `<input type="text" value="${name}" oninput="
+            data['${cat}'].items[${i}].name=this.value;save();
             buildCalc();
-          ">
+          ">`}
 
           <input type="number" value="${it.kg}" 
           oninput="data['${cat}'].items[${i}].kg=num(this.value);save();buildCalc();">
@@ -4343,7 +4361,9 @@ const cloud = {
   // sofort im Gerät gemerkt → geht beim Schließen der App nicht verloren und wird beim nächsten Öffnen nachgeschickt)
   lagerEigene:null,            // { agf: Summe, mlf: Summe, … } dieses Geräts
   lagerGebucht:{},             // Bestand, der seit dem letzten bekannten Cloud-Stand schon in lagerEigene gebucht ist
-  eilig:false                  // History/Lieferungen sofort schicken (nicht 0,4 s sammeln)
+  eilig:false,                 // History/Lieferungen sofort schicken (nicht 0,4 s sammeln)
+  // F15: selbst gerade hinzugefügte/entfernte Einträge (id → Zeit). Ein Cloud-Stand, dem sie noch fehlen, ist veraltet.
+  kuerzlich:{ history:{ dazu:new Map(), weg:new Map() }, lieferungen:{ dazu:new Map(), weg:new Map() } }
 };
 
 function kopie(o){ return o===undefined ? null : JSON.parse(JSON.stringify(o)); }
@@ -4508,6 +4528,10 @@ function cloudSchreiben(){
       Object.entries(monate).forEach(([m,objs])=>ops.push(b=>b.set(col.doc(m), { eintraege:objs })));
       new Set([...bekannt.values()].map(x=>x.monat)).forEach(m=>{ if(!monate[m]) ops.push(b=>b.delete(col.doc(m))); });
     }
+    // F15: merken, was dieses Gerät gerade geschickt hat
+    const jetzt=Date.now(), k=cloud.kuerzlich[art];
+    neuStand.forEach((x,id)=>{ if(!bekannt.has(id) || !nurVorne){ k.dazu.set(id,jetzt); k.weg.delete(id); } });
+    bekannt.forEach((x,id)=>{ if(!neuStand.has(id)){ k.weg.set(id,jetzt); k.dazu.delete(id); } });
     cloud.stand[art]=neuStand;
   });
 
@@ -4635,6 +4659,19 @@ function neuZeichnen(){
   baueBetriebBereich();
 }
 
+// F15: Kommt aus der Cloud kurz ein älterer Stand (eigener neuer Eintrag fehlt noch / eigener gelöschter ist noch da),
+// diesen nicht übernehmen – der richtige folgt gleich. Nach 60 s gilt der Cloud-Stand wieder (z. B. falls Schreiben abgelehnt).
+function cloudStandVeraltet(art, wert){
+  const k=cloud.kuerzlich[art], grenze=Date.now()-60000;
+  [k.dazu,k.weg].forEach(m=>m.forEach((t,id)=>{ if(t<grenze) m.delete(id); }));
+  if(!k.dazu.size && !k.weg.size) return false;
+  const ids=new Set((wert||[]).map(o=>o.id));
+  let veraltet=false;
+  k.dazu.forEach((t,id)=>{ if(ids.has(id)) k.dazu.delete(id); else veraltet=true; });
+  k.weg.forEach((t,id)=>{ if(!ids.has(id)) k.weg.delete(id); else veraltet=true; });
+  return veraltet;
+}
+
 // Betrieb abonnieren. Liefert ein Promise, das erfüllt ist, wenn alle Bereiche einmal geladen sind.
 function cloudAbonnieren(){
   const ref=db.collection("betriebe").doc(betriebId);
@@ -4662,6 +4699,7 @@ function cloudAbonnieren(){
       }
       // Eigene, noch unbestätigte Änderungen oder ungespeicherte lokale Änderungen: abwarten
       if(meta.hasPendingWrites || cloud.offen[art]) return;
+      if((art==="history" || art==="lieferungen") && cloudStandVeraltet(art, wert)) return;
       const vorher=gleicherStand([data,globalCfg,lagerData,historyData,lieferungen]);
       cloudUebernehmen(art, wert);
       if(gleicherStand([data,globalCfg,lagerData,historyData,lieferungen])!==vorher) neuZeichnen();
